@@ -73,11 +73,23 @@ try {
   });
   ok('criar departamento');
 
+  const departamentosList = await req('GET', '/api/departamentos', { token });
+  if (!departamentosList.some((d) => d.id === departamento.id)) {
+    throw new Error('departamento sem id na listagem');
+  }
+  ok('listar departamentos');
+
   cargo = await req('POST', '/api/cargos', {
     token,
     body: { nome: `Teste Cargo ${sufixo}` },
   });
   ok('criar cargo');
+
+  const cargosList = await req('GET', '/api/cargos', { token });
+  if (!cargosList.some((c) => c.id === cargo.id)) {
+    throw new Error('cargo sem id na listagem');
+  }
+  ok('listar cargos');
 
   horario = await req('POST', '/api/horarios', {
     token,
@@ -96,6 +108,12 @@ try {
     },
   });
   ok('criar horário');
+
+  const horariosList = await req('GET', '/api/horarios', { token });
+  if (!horariosList.some((h) => h.id === horario.id)) {
+    throw new Error('horário sem id na listagem');
+  }
+  ok('listar horários');
 
   parametro = await req('POST', '/api/parametros', {
     token,

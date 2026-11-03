@@ -109,7 +109,9 @@ function simpleCrud({
   allowDelete = true,
 }) {
   const router = Router();
-  const select = columns.join(', ');
+  // `columns` é a whitelist de escrita, mas a leitura precisa sempre incluir o
+  // `id` (o frontend usa o id para editar/excluir e para vincular registros).
+  const select = ['id', ...columns, 'created_at'].join(', ');
   const scope = (req) => scopeValue(req);
 
   router.get('/', async (req, res) => {
