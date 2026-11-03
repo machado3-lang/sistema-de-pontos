@@ -411,6 +411,8 @@ Análise completa de lacunas vs. RHiD, Secullum e EzPoint Web: **[ROADMAP_PROFIS
 - `ponto-cloud/db/migrations/002_hist_horarios.sql`
 - `ponto-cloud/db/migrations/003_equipamentos_campos.sql`
 - `ponto-cloud/db/migrations/004_empresas_tenant.sql`
+- `ponto-cloud/db/migrations/005_empresas_tenant_backfill.sql`
+- `ponto-cloud/db/migrations/006_push_persistencia.sql`
 
 ### Empresas por conta (correção)
 
@@ -428,12 +430,16 @@ empresa filha desde que pertença à conta.
 - `DELETE /api/marcacoes-descartadas?funcionario_id&data&hora`
 - `DELETE /api/empresas/:id` desabilitado (empresa é o próprio tenant)
 
+### Push persistido (03/11/2026)
+
+- `push-store.js` grava `devices`, `events`, `results`, `commands` e `marcações`
+  no PostgreSQL (write-through) e recarrega tudo no boot.
+- Retenção automática: eventos/resultados por 30 dias, comandos entregues por 7.
+- Sem `DATABASE_URL`, continua usando o JSON local (`data/push_marcacoes.json`).
+
 ### Ainda pendente na Fase 5
 
-- Persistir o **push server** (`devices`, `events`, `results`, `commands`) no
-  PostgreSQL — hoje `server.js` mantém em memória e perde no restart.
 - Deprecar `/api/reps` (JSON `data/database.json`), mantendo só o proxy FCGI.
-- Rodar `npm run migrate` e `npm run test:api` no Railway (sem Docker local).
 - Criptografar credenciais de REP (fica para a Fase 6).
 
 ### Como validar no Railway

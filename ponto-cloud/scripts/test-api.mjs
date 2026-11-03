@@ -14,6 +14,7 @@ const PORT = process.env.PORT || 3100;
 const BASE = (process.env.BASE_URL || `http://127.0.0.1:${PORT}`).replace(/\/+$/, '');
 const EMAIL = process.env.ADMIN_EMAIL;
 const PASSWORD = process.env.ADMIN_PASSWORD;
+const API_TOKEN = process.env.API_TOKEN;
 
 if (!EMAIL || !PASSWORD) {
   console.error('[test-api] Defina ADMIN_EMAIL e ADMIN_PASSWORD.');
@@ -291,6 +292,34 @@ try {
     body: { data: `2099-12-${String((Number(sufixo) % 28) + 1).padStart(2, '0')}`, nome: `Teste ${sufixo}`, tipo: 'municipal' },
   });
   ok('criar feriado');
+
+  if (API_TOKEN) {
+    await req('POST', '/api/push/event', {
+      token: API_TOKEN,
+      body: { user_id: `teste-${sufixo}`, data_hora: '2026-10-30 08:00:00', pis: '12345678901' },
+    });
+    ok('push: enviar evento');
+
+    const eventosPush = await req('GET', '/api/push/events?limit=5', { token: API_TOKEN });
+    if (!Array.isArray(eventosPush.events)) throw new Error('push: events inválido');
+    ok('push: listar eventos');
+
+    const marcacoesPush = await req('GET', '/api/push/marcacoes?limit=5', { token: API_TOKEN });
+    if (!Array.isArray(marcacoesPush.marcacoes)) throw new Error('push: marcações inválido');
+    ok('push: listar marcações');
+
+    const comando = await req('POST', '/api/push/cmd', {
+      token: API_TOKEN,
+      body: { method: 'POST', url: '/teste', body: {} },
+    });
+    if (!comando.cmd_id) throw new Error('push: comando sem id');
+    ok('push: enfileirar comando');
+
+    await req('POST', '/api/push/clear', { token: API_TOKEN });
+    await req('POST', '/api/push/clear_events', { token: API_TOKEN });
+    await req('DELETE', '/api/push/marcacoes', { token: API_TOKEN });
+    ok('push: limpar dados');
+  }
 
   const mobile = await req('POST', '/api/mobile/login', {
     body: { cpf, senha: 'teste12345' },

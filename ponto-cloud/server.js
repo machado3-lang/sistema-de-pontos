@@ -12,6 +12,7 @@ import { loginPermitido, limparTentativas } from './rate-limit.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createCadastrosRouter } from './routes/crud.js';
 import { createMobileRouter } from './routes/mobile.js';
+import * as pushStore from './push-store.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data');
@@ -862,6 +863,8 @@ try {
 } catch {}
 
 function salvarPushMarcacoes() {
+  // Com PostgreSQL configurado, o banco é a fonte de verdade.
+  if (dbReady) return;
   try {
     writeFileSync(PUSH_MARCACOES_FILE, JSON.stringify(PUSH_MARCACOES.slice(-5000), null, 2));
   } catch {}
@@ -916,6 +919,13 @@ function updatePushDevice(key, serial, ip, extra) {
     poll_count: (existing.poll_count || 0) + 1,
     ...(extra || {}),
   };
+  pushStore.salvarDevice({
+    device_key: key,
+    serial: PUSH_DEVICES[key].serial,
+    ip,
+    poll_count: PUSH_DEVICES[key].poll_count,
+    extra,
+  });
 }
 
 function isPushOnline(info) {
@@ -931,6 +941,8 @@ function isPushOnline(info) {
 
 function extractPushEvents(body, deviceKey, serial, ip) {
   let count = 0;
+  const novosEventos = [];
+  const novasMarcacoes = [];
   const sources = [
     ...(body.transactions || []),
     ...(body.events || []),
@@ -940,13 +952,15 @@ function extractPushEvents(body, deviceKey, serial, ip) {
   ];
   for (const item of sources) {
     if (item.user_id || item.userId || item.id_user || item.event || item.type || item.pis || item.cpf) {
-      PUSH_EVENTS.unshift({
+      const evento = {
         received_at: nowStr(),
         device_id: deviceKey,
         serial: serial || 'desconhecido',
         ip,
         data: item,
-      });
+      };
+      PUSH_EVENTS.unshift(evento);
+      novosEventos.push(evento);
       count++;
     }
     const marc = extrairMarcacaoDeEvento(item, serial, ip);
@@ -954,11 +968,14 @@ function extractPushEvents(body, deviceKey, serial, ip) {
       const existe = PUSH_MARCACOES.some(m => m.nsr == marc.nsr && m.user_id == marc.user_id && m.data == marc.data && m.hora == marc.hora);
       if (!existe) {
         PUSH_MARCACOES.push(marc);
+        novasMarcacoes.push(marc);
         salvarPushMarcacoes();
       }
     }
   }
   if (PUSH_EVENTS.length > 2000) PUSH_EVENTS.length = 2000;
+  if (novosEventos.length) pushStore.salvarEventos(novosEventos);
+  for (const marc of novasMarcacoes) pushStore.salvarMarcacao(marc);
   return count;
 }
 
@@ -976,6 +993,8 @@ app.all(['/push', '/api/push/poll'], (req, res) => {
 
   if (PUSH_CMDS.length > 0) {
     const cmd = PUSH_CMDS.shift();
+    const cmdId = cmd?.transactions?.[0]?.id;
+    if (cmdId) pushStore.marcarComandoEntregue(cmdId);
     return res.json(cmd);
   }
 
@@ -986,15 +1005,17 @@ app.post(['/result', '/api/push/result'], (req, res) => {
   const data = req.body || {};
   const { key, serial, ip } = resolveDeviceId(req);
 
-  PUSH_RESULTS.unshift({
+  const resultado = {
     received_at: nowStr(),
     device_id: key,
     serial: serial || PUSH_DEVICES[key]?.serial || 'desconhecido',
     ip,
     data,
-  });
+  };
+  PUSH_RESULTS.unshift(resultado);
   if (PUSH_RESULTS.length > 500) PUSH_RESULTS.length = 500;
   if (PUSH_DEVICES[key]) PUSH_DEVICES[key].last_seen = nowStr();
+  pushStore.salvarResultado(resultado);
   res.json({ success: true });
 });
 
@@ -1002,14 +1023,16 @@ app.post(['/event', '/api/push/event'], (req, res) => {
   const data = req.body || {};
   const { key, serial, ip } = resolveDeviceId(req);
 
-  PUSH_EVENTS.unshift({
+  const evento = {
     received_at: nowStr(),
     device_id: key,
     serial: serial || PUSH_DEVICES[key]?.serial || 'desconhecido',
     ip,
     data,
-  });
+  };
+  PUSH_EVENTS.unshift(evento);
   if (PUSH_EVENTS.length > 2000) PUSH_EVENTS.length = 2000;
+  pushStore.salvarEventos([evento]);
   if (PUSH_DEVICES[key]) {
     PUSH_DEVICES[key].last_seen = nowStr();
   } else {
@@ -1022,6 +1045,7 @@ app.post(['/event', '/api/push/event'], (req, res) => {
     if (!existe) {
       PUSH_MARCACOES.push(marc);
       salvarPushMarcacoes();
+      pushStore.salvarMarcacao(marc);
     }
   }
 
@@ -1089,17 +1113,21 @@ app.post('/api/push/cmd', auth, (req, res) => {
     }],
   };
   PUSH_CMDS.push(cmd);
+  pushStore.salvarComando({ cmd_id: cmdId, device_key: null, payload: cmd });
   res.json({ success: true, cmd_id: cmdId, queued: PUSH_CMDS.length });
 });
 
 app.post('/api/push/clear', auth, (req, res) => {
   PUSH_RESULTS.length = 0;
   PUSH_CMDS.length = 0;
+  pushStore.limparResultados();
+  pushStore.limparComandos();
   res.json({ success: true });
 });
 
 app.post('/api/push/clear_events', auth, (req, res) => {
   PUSH_EVENTS.length = 0;
+  pushStore.limparEventos();
   res.json({ success: true });
 });
 
@@ -1122,6 +1150,7 @@ app.post('/api/push/marcacoes/importar', auth, (req, res) => {
     }
   }
   salvarPushMarcacoes();
+  pushStore.marcarMarcacoesImportadas(ids);
   res.json({ success: true, importados });
 });
 
@@ -1134,12 +1163,14 @@ app.post('/api/push/marcacoes/importar/todos', auth, (req, res) => {
     }
   }
   salvarPushMarcacoes();
+  pushStore.marcarTodasImportadas();
   res.json({ success: true, importados });
 });
 
 app.delete('/api/push/marcacoes', auth, (req, res) => {
   PUSH_MARCACOES = [];
   salvarPushMarcacoes();
+  pushStore.limparMarcacoes();
   res.json({ success: true });
 });
 
@@ -1201,6 +1232,69 @@ app.use((err, req, res, next) => {
   console.error('Erro:', err);
   res.status(500).json({ error: 'Erro interno do servidor' });
 });
+
+// Recarrega o estado do push do PostgreSQL antes de aceitar requisições.
+async function carregarPushState() {
+  const estado = await pushStore.carregarEstado();
+  if (!estado) return;
+
+  const dataBR = (valor) => {
+    if (!valor) return nowStr();
+    const d = valor instanceof Date ? valor : new Date(valor);
+    return Number.isNaN(d.getTime()) ? nowStr() : d.toLocaleString('pt-BR');
+  };
+
+  for (const d of estado.devices) {
+    PUSH_DEVICES[d.device_key] = {
+      last_seen: dataBR(d.last_seen),
+      ip: d.ip,
+      serial: d.serial,
+      poll_count: d.poll_count,
+      ...(d.extra || {}),
+    };
+  }
+
+  PUSH_EVENTS.push(...estado.events.map((e) => ({
+    received_at: dataBR(e.received_at),
+    device_id: e.device_key,
+    serial: e.serial,
+    ip: e.ip,
+    data: e.data,
+  })));
+
+  PUSH_RESULTS.push(...estado.results.map((r) => ({
+    received_at: dataBR(r.received_at),
+    device_id: r.device_key,
+    serial: r.serial,
+    ip: r.ip,
+    data: r.data,
+  })));
+
+  PUSH_CMDS.push(...estado.commands.map((c) => c.payload));
+
+  PUSH_MARCACOES = estado.marcacoes.map((m) => ({
+    nsr: m.nsr === null || m.nsr === undefined ? null : Number(m.nsr),
+    user_id: m.user_id,
+    cpf: m.cpf,
+    pis: m.pis,
+    data: m.data,
+    hora: m.hora,
+    serial: m.serial,
+    ip: m.ip,
+    origem: m.origem,
+    event: '',
+    log_type: '',
+    received_at: dataBR(m.received_at),
+    importado: m.importado,
+  }));
+
+  console.log(
+    `[PUSH] estado carregado: ${Object.keys(PUSH_DEVICES).length} devices, ` +
+    `${PUSH_EVENTS.length} events, ${PUSH_MARCACOES.length} marcações, ${PUSH_CMDS.length} comandos`
+  );
+}
+
+await carregarPushState();
 
 app.listen(PORT, async () => {
   console.log(`PontoCloud rodando em http://localhost:${PORT}`);

@@ -169,10 +169,10 @@ Data: 03/11/2026
 1. ✅ Migrar horários, parâmetros, departamentos, cargos, correções, dias descartados, marcações descartadas, equipamentos e histórico para o PostgreSQL.
 2. ✅ Remover `localStorage` como fonte de verdade (mantido apenas como cache/token).
 3. ✅ Unificar REPs em `/api/equipamentos` (frontend).
-4. ⏳ Persistir push (`devices`, `events`, `results`) no banco — ainda em memória.
-5. ✅ Criar migrations para as tabelas novas (`002_hist_horarios`, `003_equipamentos_campos`).
+4. ✅ Persistir push (`devices`, `events`, `results`) no banco (`006_push_persistencia`).
+5. ✅ Criar migrations para as tabelas novas (`002` a `006`).
 
-**Pronto quando:** dois usuários em máquinas diferentes veem os mesmos dados e nada se perde ao limpar o navegador. *(Falta validar no Railway e persistir o push.)*
+**Pronto quando:** dois usuários em máquinas diferentes veem os mesmos dados e nada se perde ao limpar o navegador. *(Validado no Railway em 03/11/2026.)*
 
 ### Fase 6 — Segurança, papéis e auditoria (1 semana) — **P0**
 
