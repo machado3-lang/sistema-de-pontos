@@ -1,8 +1,10 @@
-# Continuidade — Estado do Projeto (atualizado em 31/10/2026)
+# Continuidade — Estado do Projeto (atualizado em 03/11/2026)
 
 Este documento é o **ponto de retomada**. Ele resume o que foi feito, o que está validado, o que falta e como continuar.
 
-> **Última verificação: 31/10/2026.** Build, testes do motor, lint, sintaxe do backend, arquivos-chave e afirmações de segurança foram reconferidos. Nenhum código foi alterado nesta verificação; apenas conferência e atualização deste documento.
+> **Repositório:** `sistema-de-pontos` (separado do `controle-de-acessos` em 03/11/2026).
+>
+> **Última verificação de código: 31/10/2026.** Build, testes do motor, lint, sintaxe do backend, arquivos-chave e afirmações de segurança foram reconferidos. Nenhum código foi alterado nesta verificação; apenas conferência e atualização deste documento.
 
 ---
 

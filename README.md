@@ -127,6 +127,11 @@ Uma única implementação em `ponto-web/src/engine/`:
 
 API e regras: [ponto-web/src/engine/README.md](ponto-web/src/engine/README.md).
 
+## Repositórios
+
+- **Sistema de pontos:** https://github.com/machado3-lang/sistema-de-pontos
+- **Controle de acessos:** https://github.com/machado3-lang/controle-de-acessos
+
 ## Documentação
 
 - [DOCUMENTACAO.md](DOCUMENTACAO.md) — visão funcional, API, banco, formato AFD, segurança e motor.
