@@ -1,5 +1,13 @@
 import { useState } from 'react';
 import { Plus, Edit2, Trash2, Users, Briefcase, Sliders } from './CadastrosUtils';
+import {
+  criarDepartamento,
+  atualizarDepartamento,
+  excluirDepartamento,
+  criarCargo,
+  atualizarCargo,
+  excluirCargo,
+} from '../data/pontoData';
 
 export default function AuxiliaresSection({
   subTab, departamentos, setDepartamentos, cargos, setCargos,
@@ -17,18 +25,24 @@ export default function AuxiliaresSection({
   const [editandoParamId, setEditandoParamId] = useState(null);
   const [editParamVal, setEditParamVal] = useState('');
 
-  const nextLocalId = (arr) => (arr.length > 0 ? Math.max(...arr.map(i => i.id)) + 1 : 1);
-
   const countFuncPor = (field, id) => funcionarios.filter(f => String(f[field]) === String(id)).length;
 
   const renderSection = (config) => {
-    const { data, setData, novoVal, setNovoVal, editandoId, setEditandoId, editVal, setEditVal, nameField, icon, countField } = config;
+    const {
+      data, setData, novoVal, setNovoVal, editandoId, setEditandoId, editVal, setEditVal,
+      nameField, icon, countField, recurso,
+    } = config;
 
-    const handleAdd = () => {
+    const handleAdd = async () => {
       const val = novoVal.trim();
       if (!val) return;
-      setData(prev => [...prev, { id: nextLocalId(prev), [nameField]: val }]);
-      setNovoVal('');
+      try {
+        const novo = await recurso.criar(val);
+        setData(prev => [...prev, novo]);
+        setNovoVal('');
+      } catch (e) {
+        alert('Erro ao adicionar: ' + e.message);
+      }
     };
 
     const handleEdit = (item) => {
@@ -36,12 +50,17 @@ export default function AuxiliaresSection({
       setEditVal(item[nameField] || '');
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
       const val = editVal.trim();
       if (!val) return;
-      setData(prev => prev.map(i => i.id === editandoId ? { ...i, [nameField]: val } : i));
-      setEditandoId(null);
-      setEditVal('');
+      try {
+        const atualizado = await recurso.atualizar(editandoId, val);
+        setData(prev => prev.map(i => i.id === editandoId ? { ...i, ...atualizado } : i));
+        setEditandoId(null);
+        setEditVal('');
+      } catch (e) {
+        alert('Erro ao salvar: ' + e.message);
+      }
     };
 
     const handleCancel = () => {
@@ -49,10 +68,14 @@ export default function AuxiliaresSection({
       setEditVal('');
     };
 
-    const handleDelete = (item) => {
+    const handleDelete = async (item) => {
       const nome = item[nameField] || '';
-      if (window.confirm(`Excluir "${nome}"?`)) {
+      if (!window.confirm(`Excluir "${nome}"?`)) return;
+      try {
+        await recurso.excluir(item.id);
         setData(prev => prev.filter(i => i.id !== item.id));
+      } catch (e) {
+        alert('Erro ao excluir: ' + e.message);
       }
     };
 
@@ -143,7 +166,12 @@ export default function AuxiliaresSection({
       novoVal: novoDepTab, setNovoVal: setNovoDepTab,
       editandoId: editandoDepId, setEditandoId: setEditandoDepId,
       editVal: editDepVal, setEditVal: setEditDepVal,
-      nameField: 'nome', icon: <Users size={20} />, countField: 'departamento_id'
+      nameField: 'nome', icon: <Users size={20} />, countField: 'departamento_id',
+      recurso: {
+        criar: criarDepartamento,
+        atualizar: atualizarDepartamento,
+        excluir: excluirDepartamento,
+      },
     });
   }
 
@@ -153,7 +181,12 @@ export default function AuxiliaresSection({
       novoVal: novoCarTab, setNovoVal: setNovoCarTab,
       editandoId: editandoCarId, setEditandoId: setEditandoCarId,
       editVal: editCarVal, setEditVal: setEditCarVal,
-      nameField: 'nome', icon: <Briefcase size={20} />, countField: 'cargo_id'
+      nameField: 'nome', icon: <Briefcase size={20} />, countField: 'cargo_id',
+      recurso: {
+        criar: criarCargo,
+        atualizar: atualizarCargo,
+        excluir: excluirCargo,
+      },
     });
   }
 
@@ -163,7 +196,12 @@ export default function AuxiliaresSection({
       novoVal: novoParamTab, setNovoVal: setNovoParamTab,
       editandoId: editandoParamId, setEditandoId: setEditandoParamId,
       editVal: editParamVal, setEditVal: setEditParamVal,
-      nameField: 'nome', icon: <Sliders size={20} />, countField: null
+      nameField: 'nome', icon: <Sliders size={20} />, countField: null,
+      recurso: {
+        criar: (nome) => Promise.resolve({ id: nome, nome }),
+        atualizar: () => Promise.resolve({}),
+        excluir: () => Promise.resolve(),
+      },
     });
   }
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Plus, X, Save, Edit2, Trash2, Clock, Calendar, formatMinutos, calcMinutos, nextId, DIAS_SEMANA, TIPOS_JORNADA } from './CadastrosUtils';
+import { Plus, X, Save, Edit2, Trash2, Clock, Calendar, formatMinutos, calcMinutos, DIAS_SEMANA, TIPOS_JORNADA } from './CadastrosUtils';
+import { criarHorario, atualizarHorario, excluirHorario } from '../data/pontoData';
 
 function TableList({ horarios, setSubTab, resetHorForm, handleEditarHorario, handleExcluirHorario, calcCargaSemanal }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -455,12 +456,16 @@ export default function HorarioSection({ horarios, setHorarios, subTab, setSubTa
     setEditandoHorId(null);
   };
 
-  const handleSalvarHorario = () => {
+  const handleSalvarHorario = async () => {
     if (!horForm.nome) { alert("Preencha o nome do horário!"); return; }
-    const novo = { id: nextId(), ...horForm, dias: { ...horForm.dias } };
-    setHorarios(prev => [...prev, novo]);
-    resetHorForm();
-    setSubTab('horarios');
+    try {
+      const novo = await criarHorario(horForm);
+      setHorarios(prev => [...prev, novo]);
+      resetHorForm();
+      setSubTab('horarios');
+    } catch (e) {
+      alert('Erro ao salvar horário: ' + e.message);
+    }
   };
 
   const handleEditarHorario = (hor) => {
@@ -485,16 +490,25 @@ export default function HorarioSection({ horarios, setHorarios, subTab, setSubTa
     setSubTab('editar_horario');
   };
 
-  const handleAtualizarHorario = () => {
+  const handleAtualizarHorario = async () => {
     if (!horForm.nome) { alert("Preencha o nome do horário!"); return; }
-    setHorarios(prev => prev.map(h => h.id === editandoHorId ? { ...h, ...horForm, dias: { ...horForm.dias } } : h));
-    resetHorForm();
-    setSubTab('horarios');
+    try {
+      const atualizado = await atualizarHorario(editandoHorId, horForm);
+      setHorarios(prev => prev.map(h => h.id === editandoHorId ? atualizado : h));
+      resetHorForm();
+      setSubTab('horarios');
+    } catch (e) {
+      alert('Erro ao atualizar horário: ' + e.message);
+    }
   };
 
-  const handleExcluirHorario = (id, nome) => {
-    if (window.confirm(`Excluir horário "${nome}"?`)) {
+  const handleExcluirHorario = async (id, nome) => {
+    if (!window.confirm(`Excluir horário "${nome}"?`)) return;
+    try {
+      await excluirHorario(id);
       setHorarios(prev => prev.filter(h => h.id !== id));
+    } catch (e) {
+      alert('Erro ao excluir horário: ' + e.message);
     }
   };
 

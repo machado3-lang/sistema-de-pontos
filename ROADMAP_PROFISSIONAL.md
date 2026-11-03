@@ -160,13 +160,15 @@ Data: 03/11/2026
 
 ### Fase 5 — Consolidação de dados (1–2 semanas) — **P0**
 
-1. Migrar horários, parâmetros, departamentos, cargos, correções, dias descartados, marcações descartadas, equipamentos e histórico para o PostgreSQL.
-2. Remover `localStorage` como fonte de verdade (manter só cache/token).
-3. Unificar REPs: `/api/equipamentos` no lugar de `database.json` + `ponto_equipamentos`.
-4. Persistir push (`devices`, `events`, `results`) no banco.
-5. Criar migrations para as tabelas novas.
+**Status (03/11/2026): em andamento — parte principal entregue.**
 
-**Pronto quando:** dois usuários em máquinas diferentes veem os mesmos dados e nada se perde ao limpar o navegador.
+1. ✅ Migrar horários, parâmetros, departamentos, cargos, correções, dias descartados, marcações descartadas, equipamentos e histórico para o PostgreSQL.
+2. ✅ Remover `localStorage` como fonte de verdade (mantido apenas como cache/token).
+3. ✅ Unificar REPs em `/api/equipamentos` (frontend).
+4. ⏳ Persistir push (`devices`, `events`, `results`) no banco — ainda em memória.
+5. ✅ Criar migrations para as tabelas novas (`002_hist_horarios`, `003_equipamentos_campos`).
+
+**Pronto quando:** dois usuários em máquinas diferentes veem os mesmos dados e nada se perde ao limpar o navegador. *(Falta validar no Railway e persistir o push.)*
 
 ### Fase 6 — Segurança, papéis e auditoria (1 semana) — **P0**
 

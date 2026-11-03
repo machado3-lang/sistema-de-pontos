@@ -259,6 +259,62 @@ function funcionariosRouter() {
     }
   });
 
+  // Histórico de horários (antes em localStorage).
+  router.get('/:id/hist-horarios', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const { rows } = await query(
+        `SELECT id, funcionario_id, horario_id,
+                to_char(data_inicio, 'YYYY-MM-DD') AS data_inicio, created_at
+           FROM funcionario_hist_horarios
+          WHERE empresa_id = $1 AND funcionario_id = $2
+          ORDER BY data_inicio ASC`,
+        [empresa, req.params.id]
+      );
+      res.json(rows);
+    } catch (e) {
+      tratarErro(res, e, 'funcionarios.hist_horarios.list');
+    }
+  });
+
+  router.put('/:id/hist-horarios', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const lista = Array.isArray(req.body?.historico) ? req.body.historico : [];
+      const ehUUID = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v));
+      const normalizada = lista
+        .filter((h) => h && ehUUID(h.horario_id) && h.data_inicio)
+        .slice(0, 500);
+
+      const rows = await withTransaction(async (client) => {
+        await client.query(
+          'DELETE FROM funcionario_hist_horarios WHERE empresa_id = $1 AND funcionario_id = $2',
+          [empresa, req.params.id]
+        );
+        const inseridos = [];
+        for (const h of normalizada) {
+          const r = await client.query(
+            `INSERT INTO funcionario_hist_horarios
+               (empresa_id, funcionario_id, horario_id, data_inicio)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (empresa_id, funcionario_id, horario_id, data_inicio) DO NOTHING
+             RETURNING id, funcionario_id, horario_id,
+                       to_char(data_inicio, 'YYYY-MM-DD') AS data_inicio`,
+            [empresa, req.params.id, h.horario_id, h.data_inicio]
+          );
+          if (r.rows[0]) inseridos.push(r.rows[0]);
+        }
+        return inseridos;
+      });
+
+      res.json(rows);
+    } catch (e) {
+      tratarErro(res, e, 'funcionarios.hist_horarios.replace');
+    }
+  });
+
   router.get('/:id', async (req, res) => {
     try {
       const empresa = empresaId(req, res);
@@ -523,7 +579,7 @@ function correcoesRouter() {
         params.push(req.query.data_fim);
         where.push(`data <= $${params.length}`);
       }
-      const { limit, offset } = paginacao(req);
+      const { limit, offset } = paginacao(req, 50000);
       const { rows } = await query(
         `SELECT id, funcionario_id, to_char(data, 'YYYY-MM-DD') AS data,
                 batidas_manuais, justificativa, aplicada_em, created_at
@@ -562,6 +618,28 @@ function correcoesRouter() {
       res.json(rows[0]);
     } catch (e) {
       tratarErro(res, e, 'correcoes.upsert');
+    }
+  });
+
+  // Remove pela chave natural (usada pelo frontend ao restaurar um dia).
+  router.delete('/', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const { funcionario_id, data } = req.query;
+      if (!funcionario_id || !data) {
+        return res.status(400).json({ error: 'funcionario_id e data são obrigatórios' });
+      }
+      const { rows } = await query(
+        `DELETE FROM correcoes
+          WHERE empresa_id = $1 AND funcionario_id = $2 AND data = $3
+          RETURNING id`,
+        [empresa, funcionario_id, data]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'Correção não encontrada' });
+      res.json({ ok: true });
+    } catch (e) {
+      tratarErro(res, e, 'correcoes.deleteByKey');
     }
   });
 
@@ -633,6 +711,27 @@ function diasDescartadosRouter() {
     }
   });
 
+  router.delete('/', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const { funcionario_id, data } = req.query;
+      if (!funcionario_id || !data) {
+        return res.status(400).json({ error: 'funcionario_id e data são obrigatórios' });
+      }
+      const { rows } = await query(
+        `DELETE FROM dias_descartados
+          WHERE empresa_id = $1 AND funcionario_id = $2 AND data = $3
+          RETURNING id`,
+        [empresa, funcionario_id, data]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
+      res.json({ ok: true });
+    } catch (e) {
+      tratarErro(res, e, 'dias_descartados.deleteByKey');
+    }
+  });
+
   router.delete('/:id', async (req, res) => {
     try {
       const empresa = empresaId(req, res);
@@ -699,6 +798,27 @@ function marcacoesDescartadasRouter() {
       res.status(201).json(rows[0] || { ok: true, duplicate: true });
     } catch (e) {
       tratarErro(res, e, 'marcacoes_descartadas.create');
+    }
+  });
+
+  router.delete('/', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const { funcionario_id, data, hora } = req.query;
+      if (!funcionario_id || !data || !hora) {
+        return res.status(400).json({ error: 'funcionario_id, data e hora são obrigatórios' });
+      }
+      const { rows } = await query(
+        `DELETE FROM marcacoes_descartadas
+          WHERE empresa_id = $1 AND funcionario_id = $2 AND data = $3 AND hora = $4
+          RETURNING id`,
+        [empresa, funcionario_id, data, hora]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
+      res.json({ ok: true });
+    } catch (e) {
+      tratarErro(res, e, 'marcacoes_descartadas.deleteByKey');
     }
   });
 
@@ -808,6 +928,9 @@ export function createCadastrosRouter() {
     scopeColumn: 'id',
     scopeValue: (req) => req.usuario?.empresa_id ?? null,
     orderBy: 'razao_social ASC',
+    // `empresas` é o próprio tenant: excluir quebraria o usuário. Multiempresa
+    // de verdade fica para a Fase 10.
+    allowDelete: false,
     beforeCreate: (data) => ({
       ...data,
       cpf_cnpj: somenteDigitos(data.cpf_cnpj),
@@ -848,7 +971,8 @@ export function createCadastrosRouter() {
     table: 'equipamentos',
     columns: [
       'nome', 'modelo', 'num_serie', 'localizacao', 'tipo_conexao', 'ip',
-      'porta', 'usuario', 'senha', 'cloud_url', 'api_key', 'cloud_rep_id', 'ativo',
+      'porta', 'usuario', 'senha', 'cloud_url', 'api_key', 'cloud_rep_id',
+      'observacoes', 'portaria', 'ativo',
     ],
     orderBy: 'nome ASC',
   }));

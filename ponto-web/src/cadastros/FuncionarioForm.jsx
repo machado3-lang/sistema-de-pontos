@@ -2,9 +2,9 @@ import { useState, useRef } from 'react';
 import { Camera, List } from 'lucide-react';
 import {
   Plus, X, Save, Clock, Users, Briefcase,
-  formatCPF, formatPIS,
-  salvarHistHorarios, carregarLocal
+  formatCPF, formatPIS
 } from './CadastrosUtils';
+import { salvarHistHorarios, criarDepartamento, criarCargo } from '../data/pontoData';
 import { useToast } from '../components/Toast';
 
 export default function FuncionarioForm({
@@ -39,7 +39,14 @@ export default function FuncionarioForm({
     reader.readAsDataURL(file);
   };
 
-  const motivosDemissao = carregarLocal('ponto_motivos_demissao', []);
+  const motivosDemissao = [
+    'Pedido de demissão',
+    'Dispensa sem justa causa',
+    'Dispensa por justa causa',
+    'Fim de contrato',
+    'Aposentadoria',
+    'Transferência de empresa',
+  ];
 
   const handleCpfChange = (e) => {
     const formatted = formatCPF(e.target.value);
@@ -57,31 +64,44 @@ export default function FuncionarioForm({
     return `${d}/${m}/${y}`;
   };
 
-  const handleAddDepartamento = () => {
-    if (novoDept.trim()) {
-      const novo = { id: Date.now(), nome: novoDept.trim() };
-      setDepartamentos(prev => [...prev, novo]);
+  const handleAddDepartamento = async () => {
+    const nome = novoDept.trim();
+    if (!nome) return;
+    try {
+      const novo = await criarDepartamento(nome);
+      setDepartamentos(prev => [...prev, { id: novo.id, nome: novo.nome }]);
       setForm({ ...form, departamento: novo.id });
       setNovoDept('');
       setShowDeptInput(false);
+    } catch (e) {
+      toast('Erro ao criar departamento: ' + e.message, 'error');
     }
   };
 
-  const handleAddCargo = () => {
-    if (novoCargo.trim()) {
-      const novo = { id: Date.now(), nome: novoCargo.trim() };
-      setCargos(prev => [...prev, novo]);
+  const handleAddCargo = async () => {
+    const nome = novoCargo.trim();
+    if (!nome) return;
+    try {
+      const novo = await criarCargo(nome);
+      setCargos(prev => [...prev, { id: novo.id, nome: novo.nome }]);
       setForm({ ...form, cargo: novo.id });
       setNovoCargo('');
       setShowCargoInput(false);
+    } catch (e) {
+      toast('Erro ao criar cargo: ' + e.message, 'error');
     }
   };
 
-  const handleRemoveUltimoHist = () => {
-    if (histHorarios.length > 0) {
-      const novoHist = histHorarios.slice(0, -1);
-      setHistHorarios(novoHist);
-      salvarHistHorarios(editandoId, novoHist);
+  const handleRemoveUltimoHist = async () => {
+    if (histHorarios.length === 0) return;
+    const novoHist = histHorarios.slice(0, -1);
+    setHistHorarios(novoHist);
+    if (editandoId) {
+      try {
+        await salvarHistHorarios(editandoId, novoHist);
+      } catch (e) {
+        toast('Erro ao salvar histórico: ' + e.message, 'error');
+      }
     }
   };
 

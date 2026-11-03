@@ -18,7 +18,6 @@ import RelatoriosTab from './RelatoriosTab';
 import LoginScreen from './LoginScreen';
 import MobileMarcacao from './MobileMarcacao';
 import { api, getToken, clearToken } from './api';
-import { carregarLocal, salvarLocal } from './cadastros/CadastrosUtils';
 import { ToastProvider } from './components/Toast';
 
 function DashboardLayout({ onLogout }) {
@@ -50,13 +49,12 @@ function DashboardLayout({ onLogout }) {
         setPontoData(resultado);
         setIsUploading(false);
 
-        const extras = carregarLocal('ponto_func_extras', {});
         const funcMap = {};
         funcionarios.forEach(f => {
           const cpf = (f.cpf || '').replace(/\D/g, '');
           const pis = (f.pis || '').replace(/\D/g, '');
-          if (cpf) funcMap[cpf] = { docType: 'cpf', ...f, ...extras[f.id] };
-          if (pis) funcMap[pis] = { docType: 'pis', ...f, ...extras[f.id] };
+          if (cpf) funcMap[cpf] = { docType: 'cpf', ...f };
+          if (pis) funcMap[pis] = { docType: 'pis', ...f };
         });
 
         const matched = [];
@@ -89,11 +87,6 @@ function DashboardLayout({ onLogout }) {
         }
 
         if (matched.length > 0) {
-          const existentes = carregarLocal('ponto_marcacoes', []);
-          const chaves = new Set(existentes.map(m => `${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
-          const novas = matched.filter(m => !chaves.has(`${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
-          if (novas.length > 0) salvarLocal('ponto_marcacoes', [...existentes, ...novas]);
-
           try {
             await api.marcacoes.import(matched.map(m => ({
               funcionario_id: m.funcionario_id,

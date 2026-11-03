@@ -3,6 +3,14 @@ import { FileText, Download, Users, Printer, Eye, EyeOff } from 'lucide-react';
 import { carregarParametrosMap, formatMinutos, calcMinutos } from './cadastros/parametrosUtils';
 import { calcularPeriodo } from './engine/index.js';
 import { api } from './api';
+import {
+  carregarHorarios,
+  carregarParametros,
+  carregarDepartamentos,
+  carregarCargos,
+  carregarMarcacoes,
+  carregarApuracaoExtras,
+} from './data/pontoData';
 
 function carregarLocal(key, padrao) {
   try { return JSON.parse(localStorage.getItem(key)) || padrao; } catch { return padrao; }
@@ -129,7 +137,14 @@ export default function RelatoriosTab() {
 
   useEffect(() => {
     api.funcionarios.list().then((data) => {
-      if (Array.isArray(data)) setFuncionarios(data);
+      if (Array.isArray(data)) {
+        setFuncionarios(data.map((f) => ({
+          ...f,
+          departamento: f.departamento_id || '',
+          cargo: f.cargo_id || '',
+          ativo: f.ativo !== false,
+        })));
+      }
     }).catch(() => {
       // Sem conexão com o servidor: mantém os dados locais.
     });
@@ -153,19 +168,11 @@ export default function RelatoriosTab() {
 
   const [marcacoes, setMarcacoes] = useState(() => carregarLocal('ponto_marcacoes', []));
   const syncMarcacoes = useCallback(() => {
-    const locais = carregarLocal('ponto_marcacoes', []);
-    api.marcacoes.list({ limit: 50000 }).then((data) => {
-      const apiRows = Array.isArray(data) ? data : [];
-      const existentes = new Set(apiRows.map(m => `${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
-      const novas = locais.filter(m => !existentes.has(`${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
-      const merged = [...apiRows, ...novas];
-      try { localStorage.setItem('ponto_marcacoes', JSON.stringify(merged)); } catch {
-        // Cota do localStorage cheia: mantém em memória.
-      }
-      setMarcacoes(merged);
-    }).catch(() => {
-      setMarcacoes(locais);
-    });
+    carregarMarcacoes()
+      .then((data) => setMarcacoes(Array.isArray(data) ? data : []))
+      .catch(() => {
+        setMarcacoes(carregarLocal('ponto_marcacoes', []));
+      });
   }, []);
   useEffect(() => { syncMarcacoes(); }, [syncMarcacoes]);
   useEffect(() => {
@@ -178,31 +185,51 @@ export default function RelatoriosTab() {
       window.removeEventListener('storage', onStorage);
     };
   }, [syncMarcacoes]);
-  const horarios = useMemo(() => carregarLocal('ponto_horarios', []), []);
-  const extras = useMemo(() => carregarLocal('ponto_func_extras', {}), []);
-  const correcoes = useMemo(() => carregarLocal('ponto_correcoes', {}), []);
-  const diasDescartados = useMemo(() => carregarLocal('ponto_dias_descartados', {}), []);
-  const marcacoesDescartadas = useMemo(() => carregarLocal('ponto_marcacoes_descartadas', {}), []);
-  const parametrosMap = useMemo(() => carregarParametrosMap(), []);
-  const departamentos = useMemo(() => carregarLocal('ponto_departamentos', []), []);
-  const cargos = useMemo(() => carregarLocal('ponto_cargos', []), []);
+  const [horarios, setHorarios] = useState(() => carregarLocal('ponto_horarios', []));
+  const [correcoes, setCorrecoes] = useState(() => carregarLocal('ponto_correcoes', {}));
+  const [diasDescartados, setDiasDescartados] = useState(() => carregarLocal('ponto_dias_descartados', {}));
+  const [marcacoesDescartadas, setMarcacoesDescartadas] = useState(() => carregarLocal('ponto_marcacoes_descartadas', {}));
+  const [parametrosMap, setParametrosMap] = useState(() => carregarParametrosMap());
+  const [departamentos, setDepartamentos] = useState(() => carregarLocal('ponto_departamentos', []));
+  const [cargos, setCargos] = useState(() => carregarLocal('ponto_cargos', []));
+
+  useEffect(() => {
+    carregarHorarios().then((lista) => { if (Array.isArray(lista)) setHorarios(lista); }).catch(() => {});
+    carregarParametros().then(() => setParametrosMap(carregarParametrosMap())).catch(() => {});
+    carregarDepartamentos().then((lista) => { if (Array.isArray(lista)) setDepartamentos(lista); }).catch(() => {});
+    carregarCargos().then((lista) => { if (Array.isArray(lista)) setCargos(lista); }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (funcionarios.length === 0) return;
+    let ativo = true;
+    carregarApuracaoExtras(funcionarios)
+      .then((extras) => {
+        if (!ativo) return;
+        setCorrecoes(extras.correcoes);
+        setDiasDescartados(extras.diasDescartados);
+        setMarcacoesDescartadas(extras.marcacoesDescartadas);
+      })
+      .catch(() => {
+        // Sem conexão: mantém o cache local.
+      });
+    return () => { ativo = false; };
+  }, [funcionarios]);
 
   const funcMap = useMemo(() => {
     const map = {};
     funcionarios.forEach(f => {
       const cpf = (f.cpf || '').replace(/\D/g, '');
       const pis = (f.pis || '').replace(/\D/g, '');
-      const item = { ...f, ...extras[f.id] };
-      if (cpf) map[cpf] = item;
-      if (pis) map[pis] = item;
+      if (cpf) map[cpf] = f;
+      if (pis) map[pis] = f;
     });
     return map;
-  }, [funcionarios, extras]);
+  }, [funcionarios]);
 
   const empFilter = (func) => {
     if (!selectedEmpresaId) return true;
-    const empId = String(extras[func.id]?.empresa_id || func.empresa_id || '');
-    return empId === String(selectedEmpresaId);
+    return String(func.empresa_id || '') === String(selectedEmpresaId);
   };
 
   const empresaFuncionarios = useMemo(() => {
@@ -224,7 +251,7 @@ export default function RelatoriosTab() {
       .filter(([, func]) => !filtroCargo || String(func.cargo) === String(filtroCargo))
       .map(([doc, func]) => ({ doc, func, nome: func.nome || `Func. ${doc.slice(0, 4)}...` }))
       .sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [funcMap, extras, selectedEmpresaId, searchTerm, filtroDepartamento, filtroCargo]);
+  }, [funcMap, selectedEmpresaId, searchTerm, filtroDepartamento, filtroCargo]);
 
   const funcComMarcacoes = useMemo(() => {
     const docs = new Set();
@@ -247,7 +274,7 @@ export default function RelatoriosTab() {
     }
     lista.sort((a, b) => a.nome.localeCompare(b.nome));
     return lista;
-  }, [marcacoes, funcMap, extras, selectedEmpresaId]);
+  }, [marcacoes, funcMap, selectedEmpresaId]);
 
   const dadosFunc = useMemo(() => {
     if (!visaoTodos && selectedFunc) {

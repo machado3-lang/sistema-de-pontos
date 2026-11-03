@@ -1,21 +1,14 @@
-import { useState } from 'react';
-import { Sliders, Plus, Edit2, Trash2, Copy, Save, X, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Sliders, Plus, Edit2, Trash2, Copy, X } from 'lucide-react';
 import ParametrosConfig from './ParametrosConfig';
-
-function carregarLocal(key, padrao) {
-  try { return JSON.parse(localStorage.getItem(key)) || padrao; } catch { return padrao; }
-}
-function salvarLocal(key, valor) {
-  try { localStorage.setItem(key, JSON.stringify(valor)); } catch {}
-}
-
-function migrarConfigAntiga() {
-  const antiga = carregarLocal('ponto_parametros_config', null);
-  if (!antiga) return null;
-  const list = carregarLocal('ponto_parametros_list', []);
-  if (list.length > 0) return list;
-  return [{ id: 1, nome: 'Padrão', config: antiga }];
-}
+import {
+  lerCache,
+  gravarCache,
+  carregarParametros,
+  criarParametro,
+  atualizarParametro,
+  excluirParametro,
+} from '../data/pontoData';
 
 function getPadrao() {
   return {
@@ -29,62 +22,101 @@ function getPadrao() {
 }
 
 export default function ParametrosSection({ onVoltar }) {
-  const [list, setList] = useState(() => {
-    const migrado = migrarConfigAntiga();
-    if (migrado) {
-      salvarLocal('ponto_parametros_list', migrado);
-      return migrado;
-    }
-    const existente = carregarLocal('ponto_parametros_list', []);
-    if (existente.length === 0) {
-      const padrao = [{ id: 1, nome: 'Padrão', config: getPadrao() }];
-      salvarLocal('ponto_parametros_list', padrao);
-      return padrao;
-    }
-    return existente;
-  });
+  const [list, setList] = useState(() => lerCache('parametros', []));
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState('');
   const [editandoId, setEditandoId] = useState(null);
   const [novoNome, setNovoNome] = useState('');
   const [renameId, setRenameId] = useState(null);
   const [renameVal, setRenameVal] = useState('');
 
-  const nextId = () => (list.length > 0 ? Math.max(...list.map(i => i.id)) + 1 : 1);
+  useEffect(() => {
+    let ativo = true;
+    (async () => {
+      try {
+        let dados = await carregarParametros();
+        if (dados.length === 0) {
+          const padrao = await criarParametro({ nome: 'Padrão', config: getPadrao() });
+          dados = [padrao];
+          gravarCache('parametros', dados);
+        }
+        if (ativo) setList(dados);
+      } catch (e) {
+        if (ativo) setErro(e.message || 'Não foi possível carregar os parâmetros.');
+      } finally {
+        if (ativo) setCarregando(false);
+      }
+    })();
+    return () => { ativo = false; };
+  }, []);
 
   const persist = (novaLista) => {
     setList(novaLista);
-    salvarLocal('ponto_parametros_list', novaLista);
+    gravarCache('parametros', novaLista);
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const nome = novoNome.trim() || `Parâmetros ${list.length + 1}`;
-    persist([...list, { id: nextId(), nome, config: getPadrao() }]);
-    setNovoNome('');
+    try {
+      const novo = await criarParametro({ nome, config: getPadrao() });
+      persist([...list, novo]);
+      setNovoNome('');
+    } catch (e) {
+      alert('Erro ao criar parâmetros: ' + e.message);
+    }
   };
 
-  const handleRename = (id) => {
+  const handleRename = async (id) => {
     const val = renameVal.trim();
     if (!val) { setRenameId(null); return; }
-    persist(list.map(i => i.id === id ? { ...i, nome: val } : i));
-    setRenameId(null);
+    const item = list.find(i => i.id === id);
+    if (!item) { setRenameId(null); return; }
+    try {
+      const atualizado = await atualizarParametro(id, { nome: val, config: item.config });
+      persist(list.map(i => i.id === id ? atualizado : i));
+      setRenameId(null);
+    } catch (e) {
+      alert('Erro ao renomear: ' + e.message);
+    }
   };
 
-  const handleClone = (id) => {
+  const handleClone = async (id) => {
     const item = list.find(i => i.id === id);
     if (!item) return;
-    persist([...list, { id: nextId(), nome: `${item.nome} (cópia)`, config: JSON.parse(JSON.stringify(item.config)) }]);
+    try {
+      const novo = await criarParametro({
+        nome: `${item.nome} (cópia)`,
+        config: JSON.parse(JSON.stringify(item.config)),
+      });
+      persist([...list, novo]);
+    } catch (e) {
+      alert('Erro ao duplicar: ' + e.message);
+    }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     const item = list.find(i => i.id === id);
     if (!item) return;
     if (list.length <= 1) { alert('Mantenha ao menos um conjunto de parâmetros.'); return; }
     if (!window.confirm(`Excluir "${item.nome}"?`)) return;
-    persist(list.filter(i => i.id !== id));
-    if (editandoId === id) setEditandoId(null);
+    try {
+      await excluirParametro(id);
+      persist(list.filter(i => i.id !== id));
+      if (editandoId === id) setEditandoId(null);
+    } catch (e) {
+      alert('Erro ao excluir: ' + e.message);
+    }
   };
 
-  const handleSaveEdit = (id, config) => {
-    persist(list.map(i => i.id === id ? { ...i, config } : i));
+  const handleSaveEdit = async (id, config) => {
+    const item = list.find(i => i.id === id);
+    if (!item) return;
+    try {
+      const atualizado = await atualizarParametro(id, { nome: item.nome, config });
+      persist(list.map(i => i.id === id ? atualizado : i));
+    } catch (e) {
+      alert('Erro ao salvar parâmetros: ' + e.message);
+    }
   };
 
   if (editandoId) {
@@ -111,6 +143,12 @@ export default function ParametrosSection({ onVoltar }) {
         </button>
       </div>
 
+      {erro && (
+        <div className="glass-card" style={{ padding: '0.75rem 1rem', color: 'var(--danger)' }}>
+          {erro} Exibindo os últimos dados em cache.
+        </div>
+      )}
+
       <div className="glass-card" style={{ padding: '1rem' }}>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <input
@@ -135,7 +173,11 @@ export default function ParametrosSection({ onVoltar }) {
               </tr>
             </thead>
             <tbody>
-              {list.map(item => (
+              {carregando && list.length === 0 ? (
+                <tr><td colSpan={2} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Carregando...</td></tr>
+              ) : list.length === 0 ? (
+                <tr><td colSpan={2} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Nenhum conjunto cadastrado</td></tr>
+              ) : list.map(item => (
                 <tr key={item.id}>
                   <td>
                     {renameId === item.id ? (

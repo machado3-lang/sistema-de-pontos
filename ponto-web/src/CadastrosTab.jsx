@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react';
 import { api } from './api';
-import { isValidCPF, isUUID, carregarLocal, salvarLocal, getHistHorarios, salvarHistHorarios, Users, Building2, Clock, Briefcase, Cpu, Sliders } from './cadastros/CadastrosUtils';
+import { isValidCPF, isUUID, Users, Building2, Clock, Briefcase, Cpu, Sliders } from './cadastros/CadastrosUtils';
+import {
+  lerCache,
+  carregarHorarios,
+  carregarDepartamentos,
+  carregarCargos,
+  carregarParametros,
+  carregarHistHorarios,
+  salvarHistHorarios,
+} from './data/pontoData';
 import EmpresaSection from './cadastros/EmpresaSection';
 import HorarioSection from './cadastros/HorarioSection';
 import FuncionarioForm from './cadastros/FuncionarioForm';
@@ -11,12 +20,12 @@ import EquipamentoSection from './cadastros/EquipamentoSection';
 
 export default function CadastrosTab() {
   const [subTab, setSubTab] = useState('lista_func');
-  const [empresas, setEmpresas] = useState(() => carregarLocal('ponto_empresas', []));
-  const [horarios, setHorarios] = useState(() => carregarLocal('ponto_horarios', []));
+  const [empresas, setEmpresas] = useState(() => lerCache('empresas', []));
+  const [horarios, setHorarios] = useState(() => lerCache('horarios', []));
   const [funcionarios, setFuncionarios] = useState([]);
-  const [departamentos, setDepartamentos] = useState(() => carregarLocal('ponto_departamentos', []));
-  const [cargos, setCargos] = useState(() => carregarLocal('ponto_cargos', []));
-  const [parametrosSets] = useState(() => carregarLocal('ponto_parametros_list', []));
+  const [departamentos, setDepartamentos] = useState(() => lerCache('departamentos', []));
+  const [cargos, setCargos] = useState(() => lerCache('cargos', []));
+  const [parametrosSets, setParametrosSets] = useState(() => lerCache('parametros', []));
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [editandoId, setEditandoId] = useState(null);
@@ -29,90 +38,71 @@ export default function CadastrosTab() {
     parametro_id: '', data_inicio: '', ativo: true, data_demissao: '', motivo_demissao: ''
   });
 
-  const mergeFuncExtras = (funcs) => {
-    const extras = carregarLocal('ponto_func_extras', {});
-    let removeuSenha = false;
-    for (const id of Object.keys(extras)) {
-      if (extras[id] && 'senha' in extras[id]) {
-        delete extras[id].senha;
-        removeuSenha = true;
-      }
-    }
-    if (removeuSenha) salvarLocal('ponto_func_extras', extras);
-
-    return funcs.map(f => {
-      const safe = { ...f };
-      delete safe.senha_hash;
-      const ex = { ...(extras[f.id] || {}) };
-      delete ex.senha;
-      return {
-        ...ex,
-        ...safe,
-        departamento: ex.departamento || f.departamento_id || '',
-        cargo: ex.cargo || f.cargo_id || '',
-        horario_id: ex.horario_id || f.horario_id || '',
-        parametro_id: ex.parametro_id || f.parametro_id || '',
-        foto: f.foto || ex.foto || '',
-        ativo: f.ativo !== false,
-      };
-    });
-  };
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const [func, emp] = await Promise.all([
-          api.funcionarios.list(),
-          api.empresas.list(),
-        ]);
-        if (Array.isArray(func)) setFuncionarios(mergeFuncExtras(func));
-        if (Array.isArray(emp)) setEmpresas(emp);
-      } catch (e) {
-        console.error('Erro ao carregar cadastros:', e.message);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-  useEffect(() => { salvarLocal('ponto_empresas', empresas); }, [empresas]);
-  useEffect(() => { salvarLocal('ponto_horarios', horarios); }, [horarios]);
-  useEffect(() => { salvarLocal('ponto_departamentos', departamentos); }, [departamentos]);
-  useEffect(() => { salvarLocal('ponto_cargos', cargos); }, [cargos]);
-  useEffect(() => { salvarLocal('ponto_parametros_list', parametrosSets); }, [parametrosSets]);
-
-  const salvarExtras = (id, formData) => {
-    const extras = carregarLocal('ponto_func_extras', {});
-    extras[id] = {
-      matricula: formData.matricula || '', folha: formData.folha || '',
-      foto: formData.foto || '',
-      departamento: formData.departamento || '', cargo: formData.cargo || '',
-      horario_id: formData.horario_id || '', data_inicio: formData.data_inicio || '',
-      parametro_id: formData.parametro_id || '', ativo: formData.ativo !== false,
-      data_demissao: formData.data_demissao || '', motivo_demissao: formData.motivo_demissao || '',
-      empresa_id: formData.empresa_id || ''
+  const normalizarFuncionario = (f) => {
+    const safe = { ...f };
+    delete safe.senha_hash;
+    return {
+      ...safe,
+      departamento: f.departamento_id || '',
+      cargo: f.cargo_id || '',
+      horario_id: f.horario_id || '',
+      parametro_id: f.parametro_id || '',
+      foto: f.foto || '',
+      ativo: f.ativo !== false,
     };
-    salvarLocal('ponto_func_extras', extras);
   };
 
   const carregarDadosBase = async () => {
     try {
-      const [func, emp] = await Promise.all([
+      const [func, emp, hor, dep, car, par] = await Promise.all([
         api.funcionarios.list(),
         api.empresas.list(),
+        carregarHorarios(),
+        carregarDepartamentos(),
+        carregarCargos(),
+        carregarParametros(),
       ]);
-      if (Array.isArray(func)) setFuncionarios(mergeFuncExtras(func));
+      if (Array.isArray(func)) setFuncionarios(func.map(normalizarFuncionario));
       if (Array.isArray(emp)) setEmpresas(emp);
+      if (Array.isArray(hor)) setHorarios(hor);
+      if (Array.isArray(dep)) setDepartamentos(dep);
+      if (Array.isArray(car)) setCargos(car);
+      if (Array.isArray(par)) setParametrosSets(par);
     } catch (e) {
-      console.error('Erro ao recarregar cadastros:', e.message);
+      console.error('Erro ao carregar cadastros:', e.message);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => { carregarDadosBase(); }, []);
+
   const resetForm = () => {
     setForm({ nome: '', cpf: '', pis: '', senha: '', matricula: '', folha: '', foto: '', empresa_id: '', data_admissao: '', departamento: '', cargo: '', horario_id: '', parametro_id: '', data_inicio: '', ativo: true, data_demissao: '', motivo_demissao: '' });
     setEditandoId(null);
     setHistHorarios([]);
+  };
+
+  const montarDadosFuncionario = () => {
+    const dados = {
+      nome: form.nome,
+      cpf: form.cpf.replace(/\D/g, ''),
+      pis: form.pis || null,
+      matricula: form.matricula || null,
+      folha: form.folha || null,
+      foto: form.foto || null,
+      data_admissao: form.data_admissao || null,
+      data_demissao: form.data_demissao || null,
+      motivo_demissao: form.motivo_demissao || null,
+      data_inicio: form.data_inicio || null,
+      ativo: form.ativo !== false,
+      departamento_id: isUUID(form.departamento) ? form.departamento : null,
+      cargo_id: isUUID(form.cargo) ? form.cargo : null,
+      horario_id: isUUID(form.horario_id) ? form.horario_id : null,
+      parametro_id: isUUID(form.parametro_id) ? form.parametro_id : null,
+    };
+    if (form.senha) dados.senha = form.senha;
+    return dados;
   };
 
   const handleSalvarFuncionario = async () => {
@@ -122,27 +112,10 @@ export default function CadastrosTab() {
     setCpfError('');
     const jaExiste = histHorarios.some(h => h.horario_id === form.horario_id && h.data_inicio === form.data_inicio);
     const histAtual = form.horario_id && form.data_inicio && !jaExiste ? [...histHorarios, { horario_id: form.horario_id, data_inicio: form.data_inicio }] : histHorarios;
-    const empRef = form.empresa_id || '';
-    const dadosFunc = {
-      nome: form.nome,
-      cpf: cpfLimpo,
-      pis: form.pis || null,
-      matricula: form.matricula || null,
-      folha: form.folha || null,
-      foto: form.foto || null,
-      data_admissao: form.data_admissao || null,
-      data_demissao: form.data_demissao || null,
-      motivo_demissao: form.motivo_demissao || null,
-      data_inicio: form.data_inicio || null,
-      ativo: form.ativo !== false,
-    };
-    if (form.senha) dadosFunc.senha = form.senha;
-    if (isUUID(empRef)) dadosFunc.empresa_id = empRef;
 
     try {
-      const data = await api.funcionarios.create(dadosFunc);
-      salvarHistHorarios(data.id, histAtual);
-      salvarExtras(data.id, form);
+      const data = await api.funcionarios.create(montarDadosFuncionario());
+      await salvarHistHorarios(data.id, histAtual);
       resetForm();
       carregarDadosBase();
       setSubTab('lista_func');
@@ -151,11 +124,15 @@ export default function CadastrosTab() {
     }
   };
 
-  const handleEditarFuncionario = (func) => {
+  const handleEditarFuncionario = async (func) => {
     setForm({ nome: func.nome || '', cpf: func.cpf || '', pis: func.pis || '', senha: '', matricula: func.matricula || '', folha: func.folha || '', foto: func.foto || '', empresa_id: func.empresa_id || '', data_admissao: func.data_admissao || '', departamento: func.departamento || '', cargo: func.cargo || '', horario_id: func.horario_id || '', parametro_id: func.parametro_id || '', data_inicio: func.data_inicio || '', ativo: func.ativo !== false, data_demissao: func.data_demissao || '', motivo_demissao: func.motivo_demissao || '' });
     setEditandoId(func.id);
-    setHistHorarios(getHistHorarios(func.id));
     setSubTab('editar_func');
+    try {
+      setHistHorarios(await carregarHistHorarios(func.id));
+    } catch {
+      setHistHorarios([]);
+    }
   };
 
   const handleAtualizarFuncionario = async () => {
@@ -165,27 +142,10 @@ export default function CadastrosTab() {
     setCpfError('');
     const jaExiste = histHorarios.some(h => h.horario_id === form.horario_id && h.data_inicio === form.data_inicio);
     const histAtual = form.horario_id && form.data_inicio && !jaExiste ? [...histHorarios, { horario_id: form.horario_id, data_inicio: form.data_inicio }] : histHorarios;
-    const empRef = form.empresa_id || '';
-    const dadosFunc = {
-      nome: form.nome,
-      cpf: cpfLimpo,
-      pis: form.pis || null,
-      matricula: form.matricula || null,
-      folha: form.folha || null,
-      foto: form.foto || null,
-      data_admissao: form.data_admissao || null,
-      data_demissao: form.data_demissao || null,
-      motivo_demissao: form.motivo_demissao || null,
-      data_inicio: form.data_inicio || null,
-      ativo: form.ativo !== false,
-    };
-    if (form.senha) dadosFunc.senha = form.senha;
-    if (isUUID(empRef)) dadosFunc.empresa_id = empRef;
 
     try {
-      await api.funcionarios.update(editandoId, dadosFunc);
-      salvarExtras(editandoId, form);
-      salvarHistHorarios(editandoId, histAtual);
+      await api.funcionarios.update(editandoId, montarDadosFuncionario());
+      await salvarHistHorarios(editandoId, histAtual);
       resetForm();
       carregarDadosBase();
       setSubTab('lista_func');
@@ -197,9 +157,6 @@ export default function CadastrosTab() {
   const handleExcluirFuncionario = async (id) => {
     try {
       await api.funcionarios.remove(id);
-      const extras = carregarLocal('ponto_func_extras', {});
-      delete extras[id];
-      salvarLocal('ponto_func_extras', extras);
       carregarDadosBase();
     } catch (e) {
       alert('Erro ao excluir: ' + e.message);

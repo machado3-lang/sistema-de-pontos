@@ -4,7 +4,7 @@
 
 Sistema completo para gestão de ponto eletrônico, compatível com as **Portarias 1510 (PIS)** e **671 (CPF)** do MTP. Permite cadastro de empresas, funcionários, horários, REPs (Relógios Eletrônicos de Ponto), importação e apuração de batidas, e sincronização bidirecional com equipamentos iDClass/iDFace.
 
-**Arquitetura:** Frontend React + Vite (`ponto-web`) | Backend Node.js + Express (`ponto-cloud`) | Banco: PostgreSQL (Railway) + JSON local (REPs/push) + localStorage (cadastros auxiliares).
+**Arquitetura:** Frontend React + Vite (`ponto-web`) | Backend Node.js + Express (`ponto-cloud`) | Banco: PostgreSQL (Railway) + JSON local (REPs/push) + cache no navegador (opcional).
 
 ---
 
@@ -244,13 +244,18 @@ Funções principais:
 - `processarCalculos(batidasPorFuncionario)`: agrupa por dia, ordena, calcula pares entrada/saída, detecta batidas ímpares
 - `parseMinutosToHHMM(minutos)`: formata minutos para HH:MM (suporta negativo)
 
-### Persistência Local
-O frontend usa **localStorage** para dados complementares:
-- `ponto_func_extras` — dados extras de funcionários (matrícula, departamento, etc.)
-- `ponto_marcacoes` — marcações importadas
-- `ponto_empresas`, `ponto_horarios`, `ponto_departamentos`, `ponto_cargos`, `ponto_parametros` — cadastros locais
-- `ponto_equipamentos` — REPs cadastrados
-- `ponto_hist_horarios` — histórico de horários por funcionário
+### Persistência de dados (Fase 5)
+
+O **PostgreSQL é a fonte de verdade**. O navegador mantém apenas um **cache
+síncrono** (chaves `ponto_*`) para pintar a tela antes da rede responder e para
+alimentar o motor de cálculo, que lê horários/parâmetros de forma síncrona.
+
+- Horários, parâmetros, departamentos, cargos, equipamentos, correções,
+  descartes e histórico de horários: `/api/*` → PostgreSQL.
+- Marcações: `/api/marcacoes` (importação via `/api/marcacoes/import`).
+- Dados legados no navegador são importados **uma única vez** quando o banco
+  está vazio (`src/data/pontoData.js`).
+- A única chave obrigatória no navegador é `ponto_token` (sessão).
 
 ### Variáveis de Ambiente
 - `VITE_PONTOCLOUD_URL` — URL do backend (vazio usa `/api` via proxy)

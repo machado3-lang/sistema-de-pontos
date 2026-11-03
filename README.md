@@ -17,7 +17,7 @@ Sistema de ponto eletrônico compatível com as **Portarias 1510 (PIS)** e **671
 Navegador (React)
   ├── api.js (sessão Bearer)
   ├── engine/ (cálculo de ponto)
-  └── localStorage (cadastros auxiliares)
+  └── cache local (opcional, para resposta imediata)
         │
         ▼
 ponto-cloud (Express)

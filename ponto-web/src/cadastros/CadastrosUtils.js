@@ -121,13 +121,6 @@ export function salvarLocal(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-let localIdCounter = carregarLocal('ponto_localIdCounter', Date.now());
-export function nextId() {
-  localIdCounter++;
-  salvarLocal('ponto_localIdCounter', localIdCounter);
-  return localIdCounter;
-}
-
 export function isUUID(str) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(str));
 }
@@ -254,17 +247,6 @@ export async function hashSenhaMobile(senha) {
   const iterations = 20000;
   const bits = pbkdf2Sha256(senha, salt, iterations, 32);
   return `pbkdf2$${iterations}$${bytesToBase64(salt)}$${bytesToBase64(bits)}`;
-}
-
-export function getHistHorarios(funcId) {
-  const data = carregarLocal('ponto_hist_horarios', {});
-  return data[funcId] || [];
-}
-
-export function salvarHistHorarios(funcId, hist) {
-  const data = carregarLocal('ponto_hist_horarios', {});
-  data[funcId] = hist;
-  salvarLocal('ponto_hist_horarios', data);
 }
 
 export const DIAS_SEMANA = [

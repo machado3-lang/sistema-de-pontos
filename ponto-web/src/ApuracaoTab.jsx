@@ -3,15 +3,21 @@ import { Search, AlertCircle, Clock, CheckCircle2, ChevronRight, Edit2, Calendar
 import { carregarParametrosMap } from './cadastros/parametrosUtils';
 import { calcularPeriodo, formatMinutes as formatMinutos } from './engine/index.js';
 import { api } from './api';
+import {
+  carregarApuracaoExtras,
+  carregarHorarios,
+  carregarParametros,
+  carregarMarcacoes,
+  salvarCorrecao,
+  desconsiderarDia as desconsiderarDiaApi,
+  restaurarDia as restaurarDiaApi,
+  descartarMarcacao,
+  restaurarMarcacao,
+  gravarCache,
+} from './data/pontoData';
 
 function carregarLocal(key, padrao) {
   try { return JSON.parse(localStorage.getItem(key)) || padrao; } catch { return padrao; }
-}
-
-function salvarLocal(key, valor) {
-  try { localStorage.setItem(key, JSON.stringify(valor)); } catch {
-    // Armazenamento indisponível (modo privado/cota cheia): ignora.
-  }
 }
 
 export default function ApuracaoTab() {
@@ -34,34 +40,54 @@ export default function ApuracaoTab() {
     });
   }, []);
 
+  // Correções e descartes vêm do PostgreSQL (Fase 5).
+  useEffect(() => {
+    if (funcionarios.length === 0) return;
+    let ativo = true;
+    carregarApuracaoExtras(funcionarios)
+      .then((extras) => {
+        if (!ativo) return;
+        setCorrecoes(extras.correcoes);
+        setDiasDesconsiderados(extras.diasDescartados);
+        setMarcacoesDescartadas(extras.marcacoesDescartadas);
+      })
+      .catch(() => {
+        // Sem conexão: mantém o cache local até a próxima carga.
+      });
+    return () => { ativo = false; };
+  }, [funcionarios]);
+
   const [marcacoes, setMarcacoes] = useState(() => carregarLocal('ponto_marcacoes', []));
   useEffect(() => {
-    const locais = carregarLocal('ponto_marcacoes', []);
-    api.marcacoes.list({ limit: 50000 }).then((data) => {
-      const apiRows = Array.isArray(data) ? data : [];
-      const existentes = new Set(apiRows.map(m => `${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
-      const novas = locais.filter(m => !existentes.has(`${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
-      const merged = [...apiRows, ...novas];
-      setMarcacoes(merged);
-      try { localStorage.setItem('ponto_marcacoes', JSON.stringify(merged)); } catch {
-        // Cota do localStorage cheia: mantém em memória.
-      }
-    }).catch(() => {
-      // Sem conexão com o servidor: segue com o cache local.
-    });
+    carregarMarcacoes()
+      .then((data) => { if (Array.isArray(data)) setMarcacoes(data); })
+      .catch(() => {
+        // Sem conexão com o servidor: segue com o cache local.
+      });
   }, []);
-  const horarios = useMemo(() => carregarLocal('ponto_horarios', []), []);
-  const parametrosMap = useMemo(() => carregarParametrosMap(), []);
+  const [horarios, setHorarios] = useState(() => carregarLocal('ponto_horarios', []));
+  const [parametrosMap, setParametrosMap] = useState(() => carregarParametrosMap());
+
+  useEffect(() => {
+    carregarHorarios()
+      .then((lista) => { if (Array.isArray(lista)) setHorarios(lista); })
+      .catch(() => {
+        // Sem conexão: mantém o cache local.
+      });
+    carregarParametros()
+      .then(() => setParametrosMap(carregarParametrosMap()))
+      .catch(() => {
+        // Sem conexão: mantém o cache local.
+      });
+  }, []);
 
   const funcMap = useMemo(() => {
     const map = {};
-    const extras = carregarLocal('ponto_func_extras', {});
     funcionarios.forEach(f => {
       const cpf = (f.cpf || '').replace(/\D/g, '');
       const pis = (f.pis || '').replace(/\D/g, '');
-      const item = { ...f, ...extras[f.id] };
-      if (cpf) map[cpf] = item;
-      if (pis) map[pis] = item;
+      if (cpf) map[cpf] = f;
+      if (pis) map[pis] = f;
     });
     return map;
   }, [funcionarios]);
@@ -189,6 +215,7 @@ export default function ApuracaoTab() {
         }
         list.push({
           id: `${doc}_${dateStr}`, doc, nome, data: dateStr,
+          funcionario_id: info.funcionario_id,
           batidas: info.batidas, valido: info.valido,
           total_minutos: info.total_minutos,
           carga_esperada: cargaEsperada,
@@ -224,40 +251,65 @@ export default function ApuracaoTab() {
 
   const hasMarkings = marcacoes.length > 0;
 
-  const handleAplicarCorrecao = () => {
+  const handleAplicarCorrecao = async () => {
     if (!selectedPendencia) return;
     const key = selectedPendencia.id;
-    const novas = { ...correcoes };
-    const atual = novas[key] || {};
-    novas[key] = {
-      ...atual,
-      batidas_manuais: batidaManual ? [...(atual.batidas_manuais || []), batidaManual] : (atual.batidas_manuais || []),
-      justificativa: justificativa || atual.justificativa || '',
-      aplicada_em: new Date().toISOString(),
-    };
-    setCorrecoes(novas);
-    salvarLocal('ponto_correcoes', novas);
-    setBatidaManual('');
-    setJustificativa('');
+    const atual = correcoes[key] || {};
+    const batidas = batidaManual
+      ? [...(atual.batidas_manuais || []), batidaManual]
+      : (atual.batidas_manuais || []);
+    const motivo = justificativa || atual.justificativa || '';
+
+    try {
+      await salvarCorrecao(selectedPendencia.funcionario_id, selectedPendencia.data, {
+        batidas_manuais: batidas,
+        justificativa: motivo,
+      });
+      const novas = {
+        ...correcoes,
+        [key]: {
+          ...atual,
+          batidas_manuais: batidas,
+          justificativa: motivo,
+          aplicada_em: new Date().toISOString(),
+        },
+      };
+      setCorrecoes(novas);
+      gravarCache('correcoes', novas);
+      setBatidaManual('');
+      setJustificativa('');
+    } catch (e) {
+      alert('Erro ao salvar correção: ' + e.message);
+    }
   };
 
-  const handleDesconsiderarDia = () => {
+  const handleDesconsiderarDia = async () => {
     if (!selectedPendencia) return;
     const key = selectedPendencia.id;
     const motivo = prompt('Motivo para desconsiderar este dia:', 'Falta justificada');
     if (motivo === null) return;
-    const novos = { ...diasDesconsiderados, [key]: { motivo, data: new Date().toISOString() } };
-    setDiasDesconsiderados(novos);
-    salvarLocal('ponto_dias_descartados', novos);
+    try {
+      await desconsiderarDiaApi(selectedPendencia.funcionario_id, selectedPendencia.data, motivo);
+      const novos = { ...diasDesconsiderados, [key]: { motivo, data: new Date().toISOString() } };
+      setDiasDesconsiderados(novos);
+      gravarCache('diasDescartados', novos);
+    } catch (e) {
+      alert('Erro ao desconsiderar dia: ' + e.message);
+    }
   };
 
-  const handleRestaurarDia = () => {
+  const handleRestaurarDia = async () => {
     if (!selectedPendencia) return;
     const key = selectedPendencia.id;
-    const novos = { ...diasDesconsiderados };
-    delete novos[key];
-    setDiasDesconsiderados(novos);
-    salvarLocal('ponto_dias_descartados', novos);
+    try {
+      await restaurarDiaApi(selectedPendencia.funcionario_id, selectedPendencia.data);
+      const novos = { ...diasDesconsiderados };
+      delete novos[key];
+      setDiasDesconsiderados(novos);
+      gravarCache('diasDescartados', novos);
+    } catch (e) {
+      alert('Erro ao restaurar dia: ' + e.message);
+    }
   };
 
   return (
@@ -394,20 +446,27 @@ export default function ApuracaoTab() {
                     const isManual = selectedPendencia.batidas_manuais.includes(time);
                     const isDescartada = descSet.has(time);
                     return (
-                      <div key={time + '_' + idx} onDoubleClick={() => {
+                      <div key={time + '_' + idx} onDoubleClick={async () => {
                         const key = selectedPendencia.id;
+                        const funcionarioId = selectedPendencia.funcionario_id;
+                        const data = selectedPendencia.data;
                         const novas = { ...marcacoesDescartadas };
                         if (!novas[key]) novas[key] = [];
-                        if (novas[key].includes(time)) {
-                          novas[key] = novas[key].filter(t => t !== time);
-                          if (novas[key].length === 0) delete novas[key];
-                        } else {
-                          if (window.confirm(`Desconsiderar marcação "${time}" dos cálculos?\n\nIsso remove a batida apenas dos relatórios e cálculos.\nO registro original é preservado para fins fiscais.`)) {
+                        try {
+                          if (novas[key].includes(time)) {
+                            await restaurarMarcacao(funcionarioId, data, time);
+                            novas[key] = novas[key].filter(t => t !== time);
+                            if (novas[key].length === 0) delete novas[key];
+                          } else {
+                            if (!window.confirm(`Desconsiderar marcação "${time}" dos cálculos?\n\nIsso remove a batida apenas dos relatórios e cálculos.\nO registro original é preservado para fins fiscais.`)) return;
+                            await descartarMarcacao(funcionarioId, data, time);
                             novas[key] = [...novas[key], time];
                           }
+                          setMarcacoesDescartadas(novas);
+                          gravarCache('marcacoesDescartadas', novas);
+                        } catch (e) {
+                          alert('Erro ao atualizar marcação: ' + e.message);
                         }
-                        setMarcacoesDescartadas(novas);
-                        salvarLocal('ponto_marcacoes_descartadas', novas);
                       }} style={{
                         padding: '0.75rem 1.5rem',
                         background: isDescartada ? 'rgba(230,46,46,0.1)' : (isManual ? 'rgba(99,102,241,0.15)' : 'var(--bg-secondary)'),

@@ -1,7 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Save, X, Edit2, Trash2, Cpu, Wifi, Server, Globe, CheckCircle, XCircle, RefreshCw, Upload, Download, Building2, Users, nextId, carregarLocal, salvarLocal } from './CadastrosUtils';
+import { Plus, Save, X, Edit2, Trash2, Cpu, Wifi, Server, Globe, CheckCircle, XCircle, RefreshCw, Upload, Download, Building2, Users } from './CadastrosUtils';
 import ConfirmModal from '../components/ConfirmModal';
 import { api } from '../api';
+import {
+  carregarEquipamentos,
+  criarEquipamento,
+  atualizarEquipamento,
+  excluirEquipamento,
+} from '../data/pontoData';
 
 async function testCloudConnection(url) {
   try {
@@ -719,7 +725,8 @@ function EquipamentoForm({ form, setForm, editandoId, setSubTab, resetForm, hand
 }
 
 export default function EquipamentoSection({ subTab, setSubTab, empresas = [], funcionarios = [] }) {
-  const [equipamentos, setEquipamentos] = useState(() => carregarLocal('ponto_equipamentos', []));
+  const [equipamentos, setEquipamentos] = useState([]);
+  const [carregandoEquip, setCarregandoEquip] = useState(true);
   const [editandoId, setEditandoId] = useState(null);
   const [cloudStatus, setCloudStatus] = useState({});
   const [verificando, setVerificando] = useState({});
@@ -727,7 +734,6 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
   const [testRes, setTestRes] = useState(null);
   const [registrando, setRegistrando] = useState(false);
   const [cloudRepId, setCloudRepId] = useState(null);
-  const [inicializado, setInicializado] = useState(false);
   const [conectandoREP, setConectandoREP] = useState(false);
   const [repInfo, setRepInfo] = useState(null);
   const [repErro, setRepErro] = useState(null);
@@ -759,25 +765,33 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
     });
   });
 
-  if (!inicializado) {
-    setInicializado(true);
+  useEffect(() => {
+    let ativo = true;
+    carregarEquipamentos()
+      .then((lista) => { if (ativo) setEquipamentos(lista); })
+      .catch(() => {
+        // Sem conexão: a lista fica vazia até a próxima carga.
+      })
+      .finally(() => { if (ativo) setCarregandoEquip(false); });
+    return () => { ativo = false; };
+  }, []);
+
+  useEffect(() => {
     const repsCloud = equipamentos.filter(e => e.tipo_conexao === 'idcloud' && e.cloud_url);
-    if (repsCloud.length > 0) {
-      const st = {};
-      const vf = {};
-      repsCloud.forEach(e => { vf[e.id] = true; });
-      setVerificando(vf);
-      Promise.all(repsCloud.map(async e => {
-        const status = await getRepCloudStatus(e.cloud_url, e.api_key, e.cloud_rep_id);
-        return { id: e.id, status };
-      })).then(results => {
-        const novoSt = {};
-        results.forEach(r => { novoSt[r.id] = r.status; });
-        setCloudStatus(novoSt);
-        setVerificando({});
-      });
-    }
-  }
+    if (repsCloud.length === 0) return;
+    const vf = {};
+    repsCloud.forEach(e => { vf[e.id] = true; });
+    setVerificando(vf);
+    Promise.all(repsCloud.map(async e => {
+      const status = await getRepCloudStatus(e.cloud_url, e.api_key, e.cloud_rep_id);
+      return { id: e.id, status };
+    })).then(results => {
+      const novoSt = {};
+      results.forEach(r => { novoSt[r.id] = r.status; });
+      setCloudStatus(novoSt);
+      setVerificando({});
+    });
+  }, [equipamentos]);
 
   const equipPadrao = {
     nome: '', modelo: 'iDClass', num_serie: '', localizacao: '', ativo: true,
@@ -1137,8 +1151,10 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
               jaExistem++;
             } else {
               novosFuncs.push({
-                id: `iface_${equip.id}_${matricula}_${Date.now()}`,
-                nome: u.name || 'Importado iDFace', matricula,
+                nome: u.name || 'Importado iDFace',
+                matricula,
+                cpf: String(u.cpf || u.CPF || u.documento || u.document || '').replace(/\D/g, ''),
+                pis: String(u.pis || u.PIS || '').replace(/\D/g, ''),
                 empresa_id: equip.empresa_id
               });
             }
@@ -1151,13 +1167,29 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
             'Importar', 'Cancelar'
           );
           if (importar) {
-            const extras = carregarLocal('ponto_func_extras', {});
+            let criados = 0;
+            let semDoc = 0;
             for (const f of novosFuncs) {
-              extras[f.id] = { empresa_id: equip.empresa_id, ativo: true };
+              const doc = String(f.cpf || f.pis || '').replace(/\D/g, '');
+              if (doc.length !== 11) { semDoc++; continue; }
+              try {
+                await api.funcionarios.create({
+                  nome: f.nome,
+                  cpf: doc,
+                  pis: f.pis || null,
+                  matricula: f.matricula || null,
+                  ativo: true,
+                });
+                criados++;
+              } catch (e) {
+                console.warn('Falha ao importar funcionário do iDFace:', f.nome, e.message);
+              }
             }
-            salvarLocal('ponto_func_extras', extras);
-            setSyncResult({ ok: true, message: `${novosFuncs.length} funcionários importados do iDFace!` });
-            setTimeout(() => window.location.reload(), 2000);
+            setSyncResult({
+              ok: criados > 0,
+              message: `${criados} funcionário(s) importado(s) do iDFace.${semDoc ? ` ${semDoc} sem CPF/PIS válido não importado(s).` : ''}`,
+            });
+            if (criados > 0) setTimeout(() => window.location.reload(), 2000);
           } else {
             setSyncResult({ ok: true, message: 'Importação cancelada.' });
           }
@@ -1191,23 +1223,18 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
             'Importar', 'Cancelar'
           );
           if (importar) {
-            const extras = carregarLocal('ponto_func_extras', {});
             for (const f of novosFuncs) {
               try {
-                const ins = await api.funcionarios.create({
+                await api.funcionarios.create({
                   nome: f.nome,
                   cpf: f.cpf,
                   empresa_id: equip.empresa_id,
                   ativo: true,
                 });
-                if (ins?.id) {
-                  extras[ins.id] = { empresa_id: equip.empresa_id, ativo: true };
-                }
               } catch (e) {
                 console.warn('Falha ao importar funcionário:', f.nome, e.message);
               }
             }
-            salvarLocal('ponto_func_extras', extras);
             setSyncResult({ ok: true, message: `${novosFuncs.length} funcionários importados do REP para a empresa!` });
             setTimeout(() => window.location.reload(), 2000);
           } else {
@@ -1266,11 +1293,10 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
         const data = await res.json();
         const logs = Object.values(data).find(v => Array.isArray(v)) || [];
 
-        const extras = carregarLocal('ponto_func_extras', {});
         const funcMap = {};
         funcs.forEach(f => {
           const mat = (f.matricula || '').replace(/\D/g, '');
-          if (mat) funcMap[mat] = { ...f, ...extras[f.id] };
+          if (mat) funcMap[mat] = f;
         });
 
         for (const log of logs) {
@@ -1315,13 +1341,12 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
         const afdText = await res.text();
         const linhas = afdText.split('\n');
 
-        const extras = carregarLocal('ponto_func_extras', {});
         const funcMap = {};
         funcs.forEach(f => {
           const cpf = (f.cpf || '').replace(/\D/g, '');
           const pis = (f.pis || '').replace(/\D/g, '');
-          if (cpf) funcMap[cpf] = { docType: 'cpf', ...f, ...extras[f.id] };
-          if (pis) funcMap[pis] = { docType: 'pis', ...f, ...extras[f.id] };
+          if (cpf) funcMap[cpf] = { docType: 'cpf', ...f };
+          if (pis) funcMap[pis] = { docType: 'pis', ...f };
         });
 
         for (const linha of linhas) {
@@ -1363,8 +1388,21 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
       }
 
       if (matched.length > 0) {
-        const existentes = carregarLocal('ponto_marcacoes', []);
-        salvarLocal('ponto_marcacoes', [...existentes, ...matched]);
+        try {
+          await api.marcacoes.import(matched.map(m => ({
+            funcionario_id: m.funcionario_id,
+            nsr: m.nsr,
+            cpf: m.cpf,
+            pis: m.pis,
+            data: m.data,
+            hora: m.hora,
+            equip_id: m.equip_id,
+            equip_nome: m.equip_nome,
+            origem: 'afd',
+          })));
+        } catch (e) {
+          console.warn('Falha ao importar marcações no servidor:', e.message);
+        }
       }
 
       if (equip.cloud_rep_id && equip.tipo_conexao === 'idcloud' && matched.length > 0) {
@@ -1544,16 +1582,14 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
     const cloudUrl = equip.cloud_url || 'http://localhost:3100';
     const token = equip.api_key || '';
     const funcs = funcionarios.filter(f => String(f.empresa_id || '') === String(equip.empresa_id));
-    const extras = carregarLocal('ponto_func_extras', {});
     const sess = repInfo.sessao || repInfo.session;
     let enviadas = 0;
     let semFoto = 0;
     let erros = 0;
 
     for (const f of funcs) {
-      const extra = extras[f.id] || {};
-      const foto = extra.foto || '';
-      const matricula = (extra.matricula || '').replace(/\D/g, '') || (f.matricula || '').replace(/\D/g, '');
+      const foto = f.foto || '';
+      const matricula = (f.matricula || '').replace(/\D/g, '');
       if (!foto || !matricula) {
         if (!foto) semFoto++;
         continue;
@@ -1621,18 +1657,18 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
         method: 'POST', headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
-        const ids = pushMarcacoes.map(m => m.nsr);
-        const existentes = carregarLocal('ponto_marcacoes', []);
         const novas = pushMarcacoes.map(m => ({
           nsr: m.nsr, cpf: m.cpf, pis: m.pis,
           data: m.data, hora: m.hora,
-          importado_em: new Date().toISOString(),
           equip_id: equip.id,
           equip_nome: equip.nome,
           origem: 'push',
-          sem_funcionario: true,
         }));
-        salvarLocal('ponto_marcacoes', [...novas, ...existentes]);
+        try {
+          await api.marcacoes.import(novas);
+        } catch (e) {
+          console.warn('Falha ao importar marcações push:', e.message);
+        }
         refreshPushMonitor();
       }
     } catch (e) {
@@ -1647,27 +1683,32 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
     return () => clearInterval(interval);
   }, [pushAutoRefresh, refreshPushMonitor]);
 
-  const handleSalvar = () => {
+  const handleSalvar = async () => {
     if (!form.nome) { alert("Preencha o nome do equipamento!"); return; }
     if (form.tipo_conexao === 'idcloud' && !form.cloud_url) { alert("Preencha a URL do PontoCloud!"); return; }
     if (form.tipo_conexao === 'ip_direto' && !form.ip) { alert("Preencha o endereço IP!"); return; }
-    const novo = { id: nextId(), ...form, cloud_rep_id: form.cloud_rep_id || '' };
-    const lista = [...equipamentos, novo];
-    setEquipamentos(lista);
-    salvarLocal('ponto_equipamentos', lista);
-    resetForm();
-    setSubTab('equipamentos');
+    try {
+      const novo = await criarEquipamento({ ...form, cloud_rep_id: form.cloud_rep_id || '' });
+      setEquipamentos(prev => [...prev, { ...novo, ativo: novo.ativo !== false }]);
+      resetForm();
+      setSubTab('equipamentos');
+    } catch (e) {
+      alert('Erro ao salvar equipamento: ' + e.message);
+    }
   };
 
-  const handleAtualizar = () => {
+  const handleAtualizar = async () => {
     if (!form.nome) { alert("Preencha o nome do equipamento!"); return; }
     if (form.tipo_conexao === 'idcloud' && !form.cloud_url) { alert("Preencha a URL do PontoCloud!"); return; }
     if (form.tipo_conexao === 'ip_direto' && !form.ip) { alert("Preencha o endereço IP!"); return; }
-    const lista = equipamentos.map(e => e.id === editandoId ? { ...form, id: editandoId } : e);
-    setEquipamentos(lista);
-    salvarLocal('ponto_equipamentos', lista);
-    resetForm();
-    setSubTab('equipamentos');
+    try {
+      const atualizado = await atualizarEquipamento(editandoId, form);
+      setEquipamentos(prev => prev.map(e => e.id === editandoId ? { ...atualizado, ativo: atualizado.ativo !== false } : e));
+      resetForm();
+      setSubTab('equipamentos');
+    } catch (e) {
+      alert('Erro ao atualizar equipamento: ' + e.message);
+    }
   };
 
   const handleEditar = (equip) => {
@@ -1698,17 +1739,25 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
     setSubTab('editar_equip');
   };
 
-  const handleExcluir = (id, nome) => {
-    if (window.confirm(`Excluir equipamento "${nome}"?`)) {
-      const lista = equipamentos.filter(e => e.id !== id);
-      setEquipamentos(lista);
-      salvarLocal('ponto_equipamentos', lista);
+  const handleExcluir = async (id, nome) => {
+    if (!window.confirm(`Excluir equipamento "${nome}"?`)) return;
+    try {
+      await excluirEquipamento(id);
+      setEquipamentos(prev => prev.filter(e => e.id !== id));
+    } catch (e) {
+      alert('Erro ao excluir equipamento: ' + e.message);
     }
   };
 
   if (subTab === 'equipamentos') return (
     <>
-      <EquipamentoLista equipamentos={equipamentos} empresas={empresas} setSubTab={setSubTab} resetForm={resetForm} handleEditar={handleEditar} handleExcluir={handleExcluir} cloudStatus={cloudStatus} verificando={verificando} />
+      {carregandoEquip ? (
+        <div className="glass-card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+          Carregando equipamentos...
+        </div>
+      ) : (
+        <EquipamentoLista equipamentos={equipamentos} empresas={empresas} setSubTab={setSubTab} resetForm={resetForm} handleEditar={handleEditar} handleExcluir={handleExcluir} cloudStatus={cloudStatus} verificando={verificando} />
+      )}
       <ConfirmModal open={confirmModal.open} title={confirmModal.title} message={confirmModal.message} onConfirm={confirmModal.onConfirm} onCancel={confirmModal.onCancel} confirmLabel={confirmModal.confirmLabel} cancelLabel={confirmModal.cancelLabel} />
     </>
   );

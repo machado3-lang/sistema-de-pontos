@@ -86,7 +86,16 @@ export const api = {
     }),
   },
 
-  funcionarios: crud('funcionarios'),
+  funcionarios: {
+    ...crud('funcionarios'),
+    histHorarios: {
+      list: (id) => request(`/api/funcionarios/${id}/hist-horarios`),
+      replace: (id, historico) => request(`/api/funcionarios/${id}/hist-horarios`, {
+        method: 'PUT',
+        body: { historico },
+      }),
+    },
+  },
   empresas: crud('empresas'),
   departamentos: crud('departamentos'),
   cargos: crud('cargos'),
@@ -108,18 +117,30 @@ export const api = {
     list: (params = {}) => request(`/api/correcoes${qs(params)}`),
     upsert: (data) => request('/api/correcoes', { method: 'POST', body: data }),
     remove: (id) => request(`/api/correcoes/${id}`, { method: 'DELETE' }),
+    removeByKey: (funcionario_id, data) => request(
+      `/api/correcoes${qs({ funcionario_id, data })}`,
+      { method: 'DELETE' }
+    ),
   },
 
   diasDescartados: {
     list: (params = {}) => request(`/api/dias-descartados${qs(params)}`),
     upsert: (data) => request('/api/dias-descartados', { method: 'POST', body: data }),
     remove: (id) => request(`/api/dias-descartados/${id}`, { method: 'DELETE' }),
+    removeByKey: (funcionario_id, data) => request(
+      `/api/dias-descartados${qs({ funcionario_id, data })}`,
+      { method: 'DELETE' }
+    ),
   },
 
   marcacoesDescartadas: {
     list: (params = {}) => request(`/api/marcacoes-descartadas${qs(params)}`),
     create: (data) => request('/api/marcacoes-descartadas', { method: 'POST', body: data }),
     remove: (id) => request(`/api/marcacoes-descartadas/${id}`, { method: 'DELETE' }),
+    removeByKey: (funcionario_id, data, hora) => request(
+      `/api/marcacoes-descartadas${qs({ funcionario_id, data, hora })}`,
+      { method: 'DELETE' }
+    ),
   },
 
   bancoAjustes: {

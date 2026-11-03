@@ -50,6 +50,8 @@ let horario = null;
 let cargo = null;
 let departamento = null;
 let feriado = null;
+let parametro = null;
+let equipamento = null;
 
 try {
   const login = await req('POST', '/api/auth/login', {
@@ -92,6 +94,47 @@ try {
   });
   ok('criar horário');
 
+  parametro = await req('POST', '/api/parametros', {
+    token,
+    body: {
+      nome: `Teste Param ${sufixo}`,
+      config: { noturno: { percentual_adicional: 20 }, dsr: { percentual_sobre_he: 100 } },
+    },
+  });
+  ok('criar parâmetro');
+
+  const parametrosList = await req('GET', '/api/parametros', { token });
+  if (!Array.isArray(parametrosList) || !parametrosList.some((p) => p.id === parametro.id)) {
+    throw new Error('parâmetro não listado');
+  }
+  ok('listar parâmetros');
+
+  equipamento = await req('POST', '/api/equipamentos', {
+    token,
+    body: {
+      nome: `Teste REP ${sufixo}`,
+      modelo: 'iDClass',
+      tipo_conexao: 'ip_direto',
+      ip: '192.168.0.10',
+      porta: '443',
+      portaria: '671',
+    },
+  });
+  ok('criar equipamento');
+
+  await req('PUT', `/api/equipamentos/${equipamento.id}`, {
+    token,
+    body: { observacoes: 'Teste', portaria: '1510' },
+  });
+  ok('atualizar equipamento');
+
+  const equipamentosList = await req('GET', '/api/equipamentos', { token });
+  const equipAtualizado = equipamentosList.find((e) => e.id === equipamento.id);
+  if (!equipAtualizado || equipAtualizado.portaria !== '1510') {
+    throw new Error('equipamento não atualizado');
+  }
+  ok('listar equipamentos');
+
   funcionario = await req('POST', '/api/funcionarios', {
     token,
     body: {
@@ -105,6 +148,16 @@ try {
     },
   });
   ok('criar funcionário');
+
+  await req('PUT', `/api/funcionarios/${funcionario.id}/hist-horarios`, {
+    token,
+    body: { historico: [{ horario_id: horario.id, data_inicio: '2026-01-01' }] },
+  });
+  const histHorarios = await req('GET', `/api/funcionarios/${funcionario.id}/hist-horarios`, { token });
+  if (!Array.isArray(histHorarios) || histHorarios.length !== 1) {
+    throw new Error('histórico de horários não retornado');
+  }
+  ok('histórico de horários');
 
   await req('POST', '/api/marcacoes', {
     token,
@@ -133,11 +186,48 @@ try {
   });
   ok('upsert correção');
 
+  const correcoesList = await req('GET', `/api/correcoes?funcionario_id=${funcionario.id}`, { token });
+  if (!Array.isArray(correcoesList) || correcoesList.length !== 1) {
+    throw new Error('correção não listada');
+  }
+  ok('listar correções');
+
   await req('POST', '/api/dias-descartados', {
     token,
     body: { funcionario_id: funcionario.id, data: '2026-10-31', motivo: 'Teste' },
   });
   ok('upsert dia descartado');
+
+  const diasList = await req('GET', `/api/dias-descartados?funcionario_id=${funcionario.id}`, { token });
+  if (!Array.isArray(diasList) || diasList.length !== 1) {
+    throw new Error('dia descartado não listado');
+  }
+  ok('listar dias descartados');
+
+  await req('POST', '/api/marcacoes-descartadas', {
+    token,
+    body: { funcionario_id: funcionario.id, data: '2026-10-30', hora: '12:00' },
+  });
+  ok('criar marcação descartada');
+
+  const descartadasList = await req('GET', `/api/marcacoes-descartadas?funcionario_id=${funcionario.id}`, { token });
+  if (!Array.isArray(descartadasList) || descartadasList.length < 1) {
+    throw new Error('marcação descartada não listada');
+  }
+  ok('listar marcações descartadas');
+
+  await req('DELETE', `/api/correcoes?funcionario_id=${funcionario.id}&data=2026-10-30`, { token });
+  ok('remover correção por chave');
+
+  await req('DELETE', `/api/dias-descartados?funcionario_id=${funcionario.id}&data=2026-10-31`, { token });
+  ok('remover dia descartado por chave');
+
+  await req(
+    'DELETE',
+    `/api/marcacoes-descartadas?funcionario_id=${funcionario.id}&data=2026-10-30&hora=${encodeURIComponent('12:00')}`,
+    { token }
+  );
+  ok('remover marcação descartada por chave');
 
   await req('POST', '/api/banco-horas/ajustes', {
     token,
@@ -170,6 +260,8 @@ try {
   try {
     if (funcionario && token) await req('DELETE', `/api/funcionarios/${funcionario.id}`, { token });
     if (horario && token) await req('DELETE', `/api/horarios/${horario.id}`, { token });
+    if (parametro && token) await req('DELETE', `/api/parametros/${parametro.id}`, { token });
+    if (equipamento && token) await req('DELETE', `/api/equipamentos/${equipamento.id}`, { token });
     if (cargo && token) await req('DELETE', `/api/cargos/${cargo.id}`, { token });
     if (departamento && token) await req('DELETE', `/api/departamentos/${departamento.id}`, { token });
     if (feriado && token) await req('DELETE', `/api/feriados/${feriado.id}`, { token });

@@ -1,14 +1,6 @@
 import { useState } from 'react';
 import { Clock, Moon, Sun, AlertTriangle, Calendar, Percent, X, Save } from 'lucide-react';
 
-function carregarLocal(key, padrao) {
-  try { return JSON.parse(localStorage.getItem(key)) || padrao; } catch { return padrao; }
-}
-
-function salvarLocal(key, valor) {
-  try { localStorage.setItem(key, JSON.stringify(valor)); } catch {}
-}
-
 const CONFIG_PADRAO = {
   noturno: {
     percentual_adicional: 20,
@@ -197,7 +189,7 @@ function Campo({ secao, campo, config, onChange }) {
 }
 
 export default function ParametrosConfig({ initialConfig, nome, onSave, onVoltar }) {
-  const [config, setConfig] = useState(() => initialConfig || carregarLocal('ponto_parametros_config', CONFIG_PADRAO));
+  const [config, setConfig] = useState(() => initialConfig || CONFIG_PADRAO);
   const [salvo, setSalvo] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState(SECOES[0].chave);
 
@@ -215,22 +207,14 @@ export default function ParametrosConfig({ initialConfig, nome, onSave, onVoltar
   };
 
   const handleSalvar = () => {
-    if (onSave) {
-      onSave(config);
-    } else {
-      salvarLocal('ponto_parametros_config', config);
-    }
+    if (onSave) onSave(config);
     setSalvo(true);
     setTimeout(() => setSalvo(false), 3000);
   };
 
   const handleResetar = () => {
     setConfig(CONFIG_PADRAO);
-    if (onSave) {
-      onSave(CONFIG_PADRAO);
-    } else {
-      salvarLocal('ponto_parametros_config', CONFIG_PADRAO);
-    }
+    if (onSave) onSave(CONFIG_PADRAO);
     setSalvo(true);
     setTimeout(() => setSalvo(false), 3000);
   };

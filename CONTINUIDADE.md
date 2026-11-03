@@ -243,9 +243,9 @@ CONTINUIDADE.md
 - CORS fica aberto se `CORS_ORIGINS` não for definido.
 - RLS não separa empresas (single-tenant).
 - Mobile depende do PostgreSQL configurado (`DATABASE_URL`).
-- A senha do próprio REP ainda fica no `localStorage` do cadastro de equipamentos.
+- A senha do REP fica em **texto puro** na tabela `equipamentos` (criptografia na Fase 6).
 - `docker-compose.yml` tem serviços `face-*` sem diretório.
-- `node_modules` está versionado no Git e não há `.gitignore` na raiz.
+- Push server (`devices`/`events`/`results`) ainda em memória no `server.js`.
 
 ---
 
@@ -270,6 +270,10 @@ CONTINUIDADE.md
 - [x] Fase 4b: login validado no Railway.
 - [ ] Fase 4c: validar CRUD completo (funcionário, marcação, relatório) no Railway.
 - [ ] Fase 5: migrar auxiliares do `localStorage` + REP/push para o PostgreSQL.
+  - [x] Horários, parâmetros, departamentos, cargos, correções, descartes, equipamentos e histórico.
+  - [x] Marcações importadas via API.
+  - [ ] Persistir push (`devices`/`events`/`results`) no PostgreSQL.
+  - [ ] Validar `npm run migrate` + `npm run test:api` no Railway.
 - [ ] Fase 6: roles, auditoria e hardening.
 - [ ] Fase 7: conformidade fiscal e folha.
 - [ ] Fase 8: workflow e relatórios.
@@ -369,3 +373,70 @@ Análise completa de lacunas vs. RHiD, Secullum e EzPoint Web: **[ROADMAP_PROFIS
 3. Depois: conformidade fiscal/folha (Fase 7), workflow/relatórios (Fase 8), mobile/portal (Fase 9) e operação/SaaS (Fase 10).
 
 **Critérios de “pronto para produção”** estão na seção 5 do roadmap.
+
+---
+
+## 14. Fase 5 — Consolidação de dados (03/11/2026)
+
+**Objetivo:** PostgreSQL como fonte de verdade; `localStorage` só como cache/token.
+
+### Entregue
+
+| Item | Antes | Agora |
+|---|---|---|
+| Horários | `ponto_horarios` | `/api/horarios` (`config jsonb`) |
+| Parâmetros | `ponto_parametros_list` | `/api/parametros` (`config jsonb`) |
+| Departamentos / cargos | `ponto_departamentos` / `ponto_cargos` | `/api/departamentos` e `/api/cargos` |
+| Correções | `ponto_correcoes` | `/api/correcoes` |
+| Dias descartados | `ponto_dias_descartados` | `/api/dias-descartados` |
+| Marcações descartadas | `ponto_marcacoes_descartadas` | `/api/marcacoes-descartadas` |
+| Histórico de horários | `ponto_hist_horarios` | tabela `funcionario_hist_horarios` |
+| Equipamentos (REPs) | `ponto_equipamentos` | `/api/equipamentos` |
+| Extras do funcionário | `ponto_func_extras` | colunas da tabela `funcionarios` |
+| Marcações importadas (AFD/REP/push) | `ponto_marcacoes` | `/api/marcacoes/import` |
+
+### Arquitetura da camada de dados
+
+- `ponto-web/src/data/pontoData.js` centraliza leitura/gravação.
+- Toda escrita chama a API e atualiza o cache síncrono.
+- O cache (`ponto_horarios`, `ponto_parametros_list`, etc.) existe só para:
+  - pintar a tela antes da rede responder;
+  - alimentar `parametrosUtils.js` / motor, que leem de forma síncrona.
+- **Migração automática:** se o banco estiver vazio e houver dados legados no
+  navegador, eles são importados uma única vez (marcador
+  `ponto_migrado_<recurso>`).
+
+### Migrations novas
+
+- `ponto-cloud/db/migrations/002_hist_horarios.sql`
+- `ponto-cloud/db/migrations/003_equipamentos_campos.sql`
+
+### Endpoints novos/ajustados
+
+- `GET|PUT /api/funcionarios/:id/hist-horarios`
+- `DELETE /api/correcoes?funcionario_id&data`
+- `DELETE /api/dias-descartados?funcionario_id&data`
+- `DELETE /api/marcacoes-descartadas?funcionario_id&data&hora`
+- `DELETE /api/empresas/:id` desabilitado (empresa é o próprio tenant)
+
+### Ainda pendente na Fase 5
+
+- Persistir o **push server** (`devices`, `events`, `results`, `commands`) no
+  PostgreSQL — hoje `server.js` mantém em memória e perde no restart.
+- Deprecar `/api/reps` (JSON `data/database.json`), mantendo só o proxy FCGI.
+- Rodar `npm run migrate` e `npm run test:api` no Railway (sem Docker local).
+- Criptografar credenciais de REP (fica para a Fase 6).
+
+### Como validar no Railway
+
+```bash
+cd /app
+npm run migrate
+BASE_URL=http://localhost:3100 \
+ADMIN_EMAIL=seu-admin@empresa.com \
+ADMIN_PASSWORD='sua-senha' \
+npm run test:api
+```
+
+O smoke test agora cobre parâmetros, equipamentos, histórico de horários,
+correções e descartes (inclusive remoção por chave natural).
