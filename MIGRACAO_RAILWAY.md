@@ -193,15 +193,37 @@ SUPABASE_SERVICE_KEY=  # só durante a migração
 
 ## Deploy no Railway (resumo)
 
-1. `railway login`
-2. `railway init` (ou conectar o repositório GitHub)
-3. Adicionar PostgreSQL: `railway add --plugin postgresql`
-4. Configurar variáveis: `railway variables set ...`
-5. Deploy: `railway up` ou push no GitHub
-6. Rodar migration: `railway run npm run migrate`
-7. Testar: `https://<servico>.up.railway.app/api/health`
+O repositório `sistema-de-pontos` tem um `Dockerfile` e um `railway.json` na **raiz** para o backend. O Railway deve usar a raiz do repositório (root directory `/`).
 
-O `Dockerfile` do `ponto-cloud` já funciona. O Railway injeta `PORT`; o servidor já lê `process.env.PORT`.
+1. Conecte o repositório `machado3-lang/sistema-de-pontos`, branch `main`.
+2. Mantenha o **Root Directory** vazio (`/`).
+3. Adicione o plugin **PostgreSQL** ao projeto.
+4. Configure as variáveis do serviço:
+   - `API_TOKEN` (obrigatório; sem ele o backend não inicia em produção)
+   - `ADMIN_USER` / `ADMIN_PASSWORD`
+   - `MOBILE_TOKEN_SECRET`
+   - `CORS_ORIGINS` (ex.: `https://seu-frontend`)
+   - `SESSION_TTL_HOURS` (opcional, padrão 8)
+   - `DATABASE_URL` é injetada automaticamente pelo plugin
+5. Faça o deploy. O `railway.json` executa `npm run migrate` no `preDeployCommand` e valida `/api/health`.
+6. Crie o admin (uma vez):
+   ```bash
+   railway run env ADMIN_EMAIL=admin@empresa.com ADMIN_PASSWORD=uma-senha-forte npm run seed:admin
+   ```
+7. Teste: `https://<servico>.up.railway.app/api/health` deve retornar `db: "ok"`.
+
+### Se o deploy não iniciar
+
+- Confirme branch `main` e **Root Directory** `/`.
+- Veja os logs do deploy: erros de `npm ci`, `preDeployCommand` ou `API_TOKEN` aparecem ali.
+- Se o `preDeployCommand` falhar, verifique se o plugin PostgreSQL está vinculado (`DATABASE_URL`).
+- Após alterar configuração, clique em **Deploy** ou faça um novo push.
+
+### Frontend
+
+O frontend (`ponto-web`) pode ser um segundo serviço no Railway com **Root Directory** `ponto-web` (usa `ponto-web/railway.json`) ou ficar na Vercel. Ele ainda usa Supabase até a Fase 4; depois passará a usar `/api` do backend.
+
+O Railway injeta `PORT`; o servidor já lê `process.env.PORT`.
 
 ---
 
