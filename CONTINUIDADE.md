@@ -4,21 +4,36 @@ Este documento é o **ponto de retomada**. Ele resume o que foi feito, o que est
 
 > **Repositório:** `sistema-de-pontos` (separado do `controle-de-acessos` em 03/11/2026).
 >
-> **Última verificação de código: 31/10/2026.** Build, testes do motor, lint, sintaxe do backend, arquivos-chave e afirmações de segurança foram reconferidos. Nenhum código foi alterado nesta verificação; apenas conferência e atualização deste documento.
+> **Última verificação de código: 03/11/2026.** Build, testes do motor, `node --check`
+> do backend e smoke test da API (41 checks) validados no Railway. As seções 14 e 15
+> registram as Fases 5 e 6; a seção 16 é o handoff para o próximo dia.
 
 ---
 
 ## 1. Resumo executivo
 
-O sistema MultiPonto saiu de um MVP com credenciais fixas e cálculo duplicado para:
+O MultiPonto está em produção no **Railway + PostgreSQL**, com autenticação própria,
+frontend servido pelo backend e dados de negócio no banco (não mais no navegador).
 
-1. **Segurança P0 aplicada** — sem credenciais hardcoded, mobile validado no backend, senhas com hash, RLS no Supabase e debug removido.
-2. **Motor de cálculo unificado** — uma única fonte em `ponto-web/src/engine/`, consumida por Dashboard, Apuração, Relatórios e exportações.
-3. **Base de testes do motor** — 34 verificações automatizadas com `npm run test:engine`.
+**Estado em 03/11/2026:**
+
+1. **Fases 1–4 concluídas** — schema PostgreSQL, auth própria, CRUD multiempresa e
+   frontend consumindo `/api` (Supabase removido do código).
+2. **Fase 5 concluída e validada no Railway** — horários, parâmetros, departamentos,
+   cargos, correções, descartes, histórico, equipamentos, marcações e push server
+   persistidos no PostgreSQL. Smoke test com **41 checks OK**.
+3. **Fase 6 em andamento (parte principal entregue)** — roles
+   (`admin`/`gestor`/`consulta`) aplicados no backend, auditoria em todas as
+   mutações, gestão de usuários, `helmet`, rate limit global, CORS restrito e
+   credenciais de REP criptografadas com AES-256-GCM.
+4. **Motor de cálculo unificado** em `ponto-web/src/engine/`, com 34 testes
+   (`npm run test:engine`).
 
 **Build atual:** passando (`npm run build`).
 **Testes do motor:** passando (`npm run test:engine`).
-**Backend:** sintaxe validada (`node --check server.js`).
+**Backend:** `node --check` OK em `server.js`, `routes/*.js`, `push-store.js`,
+`secret-box.js`, `auditoria.js`.
+**Smoke test da API:** 41 checks OK no Railway (03/11/2026).
 
 ---
 
@@ -497,3 +512,83 @@ correções e descartes (inclusive remoção por chave natural).
 - Refinar botões de escrita nas telas de Horários/Empresas/Parâmetros/Equipamentos
   para o perfil `consulta` (o backend já bloqueia).
 - Deprecar `/api/reps` (JSON `data/database.json`).
+
+---
+
+## 16. Handoff — retomada em 04/11/2026
+
+### O que está no ar (validado em 03/11/2026)
+
+- Deploy no Railway com commit **`b28bcd9`** (ou posterior).
+- Login web + mobile funcionando.
+- Empresas, horários, parâmetros, departamentos, cargos, equipamentos,
+  correções, descartes e histórico no PostgreSQL.
+- Push server persistido (`push_devices`, `push_events`, `push_results`,
+  `push_commands`, `push_marcacoes`).
+- Roles aplicados: `consulta` recebe 403 em qualquer escrita.
+- Auditoria gravando em `auditoria`.
+- Smoke test: **41 checks OK**.
+
+### Primeiro passo ao retomar
+
+1. Confirmar o deploy mais recente em `/api/health` (campo `commit`).
+2. Configurar `REP_SECRET` no Railway (se ainda não configurado):
+   ```bash
+   node --input-type=module -e "import { randomBytes } from 'crypto'; console.log(randomBytes(32).toString('hex'))"
+   ```
+   Adicionar em **Variables** e fazer **Redeploy**.
+3. Rodar o smoke test:
+   ```bash
+   cd /app && BASE_URL="http://127.0.0.1:${PORT}" \
+   ADMIN_EMAIL=seu-admin@empresa.com ADMIN_PASSWORD='sua-senha' npm run test:api
+   ```
+4. Conferir a criptografia:
+   ```sql
+   SELECT nome, left(senha, 12) AS senha_inicio FROM equipamentos;
+   -- esperado: enc:v1:...
+   ```
+
+### Pendências priorizadas
+
+**Fase 6 (fechar):**
+- Token de push por dispositivo (depende do firmware do REP).
+- Política de retenção/LGPD.
+- Refinar botões de escrita para `consulta` nas telas de Horários/Empresas/
+  Parâmetros/Equipamentos (backend já bloqueia).
+- Deprecar `/api/reps` (JSON legado).
+
+**Fase 7 (próxima frente — maior lacuna vs. RHiD/Secullum/EzPoint):**
+- Validador de AFD/AFDT/ACJEF/AEJ contra o leiaute oficial.
+- Hash/NSR consistente e fechamento fiscal por período.
+- Trava de período fechado + reabertura auditada.
+- Exportação para folha (Domínio, Alterdata, Fortes, Questor, Sênior) e eSocial.
+
+**Fase 8:** workflow de aprovação, férias/afastamentos, relatórios customizáveis.
+
+### Comandos úteis
+
+```bash
+# backend
+cd ponto-cloud
+node --check server.js
+npm run migrate
+npm run seed:admin
+npm run test:api
+
+# frontend
+cd ponto-web
+npm run build
+npm run test:engine
+```
+
+### Observações importantes
+
+- **O `preDeployCommand` do `railway.json` não está sendo executado.** Toda
+  migration nova precisa ser rodada manualmente (`npm run migrate` no console).
+  Investigar depois ou mover para um passo de boot.
+- **Não trocar `REP_SECRET`** depois de configurado: as credenciais antigas
+  ficam ilegíveis. Se precisar rotacionar, recadastre a senha/chave dos REPs.
+- A `DATABASE_URL` e a senha do admin foram expostas no chat em 03/11/2026;
+  recomenda-se rotacionar.
+- O painel “Upstream Repo” do Railway é cosmético enquanto o auto deploy
+  estiver funcionando.

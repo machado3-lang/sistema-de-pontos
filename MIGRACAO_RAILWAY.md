@@ -170,21 +170,24 @@ Tabelas principais:
 ```env
 # Banco (Railway injeta automaticamente)
 DATABASE_URL=postgresql://...
+PGSSL=false
+PG_POOL_MAX=10
 
-# Auth
-JWT_SECRET=
-JWT_EXPIRES_MIN=480
+# Auth / sessão
+SESSION_TTL_HOURS=8
+API_TOKEN=
+ADMIN_USER=admin
+ADMIN_PASSWORD=
 MOBILE_TOKEN_SECRET=
+
+# Criptografia das credenciais de REP (AES-256-GCM)
+REP_SECRET=
 
 # App
 PORT=3100
 NODE_ENV=production
-CORS_ORIGINS=https://seu-frontend
-API_TOKEN=
-
-# Opcional
-SUPABASE_URL=          # só durante a migração
-SUPABASE_SERVICE_KEY=  # só durante a migração
+CORS_ORIGINS=https://seu-servico.up.railway.app
+RATE_LIMIT_GLOBAL=2000
 ```
 
 > `DATABASE_URL` interna do Railway não exige SSL. Se usar a URL pública, habilite SSL no `pg.Pool`.
@@ -202,7 +205,8 @@ O repositório `sistema-de-pontos` tem um `Dockerfile` e um `railway.json` na **
    - `API_TOKEN` (obrigatório; sem ele o backend não inicia em produção)
    - `ADMIN_USER` / `ADMIN_PASSWORD`
    - `MOBILE_TOKEN_SECRET`
-   - `CORS_ORIGINS` (ex.: `https://seu-frontend`)
+   - `REP_SECRET` (criptografia das credenciais de REP)
+   - `CORS_ORIGINS` (ex.: a URL do próprio serviço)
    - `SESSION_TTL_HOURS` (opcional, padrão 8)
    - `DATABASE_URL` é injetada automaticamente pelo plugin
 5. Faça o deploy. O `railway.json` executa `npm run migrate` no `preDeployCommand` e valida `/api/health`.

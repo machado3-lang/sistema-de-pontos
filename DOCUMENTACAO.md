@@ -123,6 +123,25 @@ npm run dev          # porta 3100
 
 Marcações: `GET /api/marcacoes`, `POST /api/marcacoes`, `POST /api/marcacoes/import`.
 
+Histórico de horários: `GET/PUT /api/funcionarios/:id/hist-horarios`.
+
+#### Usuários (somente `admin`)
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/api/usuarios` | Lista usuários da conta |
+| POST | `/api/usuarios` | Cria usuário (`admin`, `gestor`, `consulta`) |
+| PUT | `/api/usuarios/:id` | Nome, perfil e ativo |
+| POST | `/api/usuarios/:id/reset-password` | Nova senha + revoga sessões |
+| POST | `/api/usuarios/:id/revoke-sessions` | Encerra sessões |
+| DELETE | `/api/usuarios/:id` | Desativa + revoga sessões |
+
+#### Permissões
+- `admin`: leitura + escrita + usuários.
+- `gestor`: leitura + escrita (sem usuários).
+- `consulta`: apenas leitura; `POST/PUT/DELETE` retornam **403**.
+
+Toda mutação grava em `auditoria` (usuário, ação, entidade, id, detalhes).
+
 #### Mobile
 | Método | Rota | Descrição |
 |--------|------|-----------|
