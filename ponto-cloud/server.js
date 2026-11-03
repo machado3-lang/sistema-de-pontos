@@ -7,7 +7,7 @@ import { randomUUID, randomBytes, timingSafeEqual } from 'crypto';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { dbReady, dbHealth } from './db.js';
+import { dbReady, dbHealth, query } from './db.js';
 import { bearer, iguaisSeguro } from './auth.js';
 import { loginPermitido, limparTentativas } from './rate-limit.js';
 import { createAuthRouter } from './routes/auth.js';
@@ -15,6 +15,7 @@ import { createCadastrosRouter } from './routes/crud.js';
 import { createMobileRouter } from './routes/mobile.js';
 import { createUsuariosRouter } from './routes/usuarios.js';
 import * as pushStore from './push-store.js';
+import { criptografar, precisaCriptografar } from './secret-box.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data');
@@ -1341,7 +1342,31 @@ async function carregarPushState() {
   );
 }
 
+// Criptografa credenciais de REP que ainda estejam em texto puro.
+async function migrarCredenciaisReps() {
+  if (!dbReady) return;
+  try {
+    const { rows } = await query('SELECT id, senha, api_key FROM equipamentos');
+    let atualizados = 0;
+    for (const r of rows) {
+      const precisa = precisaCriptografar(r.senha) || precisaCriptografar(r.api_key);
+      if (!precisa) continue;
+      await query(
+        'UPDATE equipamentos SET senha = $1, api_key = $2 WHERE id = $3',
+        [criptografar(r.senha), criptografar(r.api_key), r.id]
+      );
+      atualizados++;
+    }
+    if (atualizados > 0) {
+      console.log(`[REP] ${atualizados} credencial(is) criptografada(s).`);
+    }
+  } catch (e) {
+    console.warn('[REP] falha ao migrar credenciais:', e.message);
+  }
+}
+
 await carregarPushState();
+await migrarCredenciaisReps();
 
 app.listen(PORT, async () => {
   console.log(`PontoCloud rodando em http://localhost:${PORT}`);

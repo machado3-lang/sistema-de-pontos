@@ -440,7 +440,6 @@ empresa filha desde que pertença à conta.
 ### Ainda pendente na Fase 5
 
 - Deprecar `/api/reps` (JSON `data/database.json`), mantendo só o proxy FCGI.
-- Criptografar credenciais de REP (fica para a Fase 6).
 
 ### Como validar no Railway
 
@@ -484,10 +483,16 @@ correções e descartes (inclusive remoção por chave natural).
   - `helmet` (CSP desligada para não quebrar estilos inline).
   - Rate limit global por IP (2000 req/15 min; health e push isentos).
   - CORS fail-closed em produção quando `CORS_ORIGINS` não está definido.
+- **Credenciais de REP criptografadas** (`ponto-cloud/secret-box.js`):
+  - AES-256-GCM com chave derivada de `REP_SECRET`.
+  - `equipamentos.senha` e `equipamentos.api_key` são gravados como
+    `enc:v1:<iv>:<tag>:<cipher>` e descriptografados na leitura.
+  - No boot, credenciais antigas em texto puro são criptografadas uma vez.
+  - Sem `REP_SECRET`, o servidor avisa e mantém texto puro (compatibilidade).
 
 ### Ainda pendente na Fase 6
 
-- Criptografar credenciais de REP (`equipamentos.senha`) com `REP_SECRET`.
+- Token de push por dispositivo.
 - Tela de auditoria (consulta dos logs) — pode entrar na Fase 8.
 - Refinar botões de escrita nas telas de Horários/Empresas/Parâmetros/Equipamentos
   para o perfil `consulta` (o backend já bloqueia).

@@ -220,6 +220,9 @@ try {
       tipo_conexao: 'ip_direto',
       ip: '192.168.0.10',
       porta: '443',
+      usuario: 'admin',
+      senha: 'admin123',
+      api_key: 'chave-teste',
       portaria: '671',
     },
   });
@@ -235,6 +238,9 @@ try {
   const equipAtualizado = equipamentosList.find((e) => e.id === equipamento.id);
   if (!equipAtualizado || equipAtualizado.portaria !== '1510') {
     throw new Error('equipamento não atualizado');
+  }
+  if (equipAtualizado.senha !== 'admin123' || equipAtualizado.api_key !== 'chave-teste') {
+    throw new Error('credencial do REP não descriptografou');
   }
   ok('listar equipamentos');
 

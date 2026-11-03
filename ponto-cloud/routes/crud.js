@@ -7,6 +7,7 @@ import { Router } from 'express';
 import { query, withTransaction } from '../db.js';
 import { authWeb, hashSenha, somenteDigitos } from '../auth.js';
 import { registrar } from '../auditoria.js';
+import { criptografar, descriptografar } from '../secret-box.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -130,6 +131,7 @@ function simpleCrud({
   scopeWhere,
   beforeCreate,
   beforeUpdate,
+  afterRead,
   allowCreate = true,
   allowUpdate = true,
   allowDelete = true,
@@ -139,6 +141,7 @@ function simpleCrud({
   // `id` (o frontend usa o id para editar/excluir e para vincular registros).
   const select = ['id', ...columns, 'created_at'].join(', ');
   const scope = (req) => scopeValue(req);
+  const ler = (row) => (row && afterRead ? afterRead(row) : row);
 
   // Empilha os parâmetros do escopo e devolve a cláusula SQL (ou null).
   const pushScope = (req, params) => {
@@ -167,7 +170,7 @@ function simpleCrud({
                    ORDER BY ${orderBy}
                    LIMIT ${limit} OFFSET ${offset}`;
       const { rows } = await query(sql, params);
-      res.json(rows);
+      res.json(rows.map(ler));
     } catch (e) {
       tratarErro(res, e, `${table}.list`);
     }
@@ -181,7 +184,7 @@ function simpleCrud({
       if (clausulaEscopo) where += ` AND ${clausulaEscopo}`;
       const { rows } = await query(`SELECT ${select} FROM ${table} WHERE ${where} LIMIT 1`, params);
       if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
-      res.json(rows[0]);
+      res.json(ler(rows[0]));
     } catch (e) {
       tratarErro(res, e, `${table}.get`);
     }
@@ -199,7 +202,7 @@ function simpleCrud({
         }
         const { rows } = await insertRow(table, data);
         registrar(req, { acao: 'criar', entidade: table, entidadeId: rows[0]?.id, detalhes: data });
-        res.status(201).json(rows[0]);
+        res.status(201).json(ler(rows[0]));
       } catch (e) {
         tratarErro(res, e, `${table}.create`);
       }
@@ -218,7 +221,7 @@ function simpleCrud({
         });
         if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
         registrar(req, { acao: 'atualizar', entidade: table, entidadeId: req.params.id, detalhes: data });
-        res.json(rows[0]);
+        res.json(ler(rows[0]));
       } catch (e) {
         tratarErro(res, e, `${table}.update`);
       }
@@ -1079,14 +1082,23 @@ export function createCadastrosRouter() {
     },
     beforeCreate: async (data, req) => ({
       ...data,
+      senha: criptografar(data.senha),
+      api_key: criptografar(data.api_key),
       empresa_id: await resolverEmpresa(req.usuario?.empresa_id, req.body?.empresa_id),
     }),
     beforeUpdate: async (data, req) => {
+      if (data.senha !== undefined) data.senha = criptografar(data.senha);
+      if (data.api_key !== undefined) data.api_key = criptografar(data.api_key);
       if (req.body?.empresa_id !== undefined) {
         data.empresa_id = await resolverEmpresa(req.usuario?.empresa_id, req.body.empresa_id);
       }
       return data;
     },
+    afterRead: (row) => ({
+      ...row,
+      senha: descriptografar(row.senha),
+      api_key: descriptografar(row.api_key),
+    }),
   }));
 
   // Rotas mais específicas primeiro para evitar conflito de prefixo.

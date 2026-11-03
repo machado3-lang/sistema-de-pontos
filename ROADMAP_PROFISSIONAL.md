@@ -181,7 +181,7 @@ Data: 03/11/2026
 1. ✅ Middleware de autorização por role (`admin`, `gestor`, `consulta`).
 2. ✅ Auditoria em todas as mutações (quem, quando, entidade e detalhes).
 3. ✅ Tela de usuários, reset de senha e revogação de sessões.
-4. ⏳ `helmet` e rate limit global aplicados; falta criptografia de credenciais de REP.
+4. ✅ `helmet`, rate limit global e CORS restrito; ✅ criptografia de credenciais de REP (`REP_SECRET`).
 5. ⏳ Token de push por dispositivo.
 6. ⏳ Política de retenção/LGPD.
 
