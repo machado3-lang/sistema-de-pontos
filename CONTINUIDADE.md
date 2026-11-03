@@ -262,16 +262,21 @@ CONTINUIDADE.md
 - [x] Decidir a próxima frente: **Railway + PostgreSQL** (plano em `MIGRACAO_RAILWAY.md`).
 - [ ] Fase 0: recuperar/exportar dados do Supabase (se o projeto for recuperável).
 - [x] Fase 1: schema, runner de migrations e seed criados (`ponto-cloud/db`).
-- [ ] Fase 1b: criar Postgres no Railway e rodar `npm run migrate`.
+- [x] Fase 1b: criar Postgres no Railway e rodar `npm run migrate`.
 - [x] Fase 2: auth própria implementada (`/api/auth/login|me|logout|change-password`).
 - [x] Fase 3: CRUD multiempresa implementado (`/api/funcionarios`, `/api/empresas`, ...).
-- [ ] Fase 3b: rodar `npm run migrate` + `npm run test:api` contra um Postgres real.
+- [ ] Fase 3b: rodar `npm run test:api` contra o Postgres real.
 - [x] Fase 4: trocar Supabase por `src/api.js` no frontend.
-- [ ] Fase 4b: validar login/CRUD real no Railway.
-- [ ] Fase 5: deploy, backup e testes.
-- [ ] Configurar `.env` de produção e testar `docker compose up` do ponto. *(depende do `.env`; Docker não encontrado no PATH desta máquina)*
-- [x] Limpar repositório (novo repo tem `.gitignore` e não versiona `node_modules`).
-- [ ] Commitar a entrega em blocos: segurança, motor, docs, Railway.
+- [x] Fase 4b: login validado no Railway.
+- [ ] Fase 4c: validar CRUD completo (funcionário, marcação, relatório) no Railway.
+- [ ] Fase 5: migrar auxiliares do `localStorage` + REP/push para o PostgreSQL.
+- [ ] Fase 6: roles, auditoria e hardening.
+- [ ] Fase 7: conformidade fiscal e folha.
+- [ ] Fase 8: workflow e relatórios.
+- [ ] Fase 9: mobile e portal do funcionário.
+- [ ] Fase 10: operação/SaaS (backup, CI/CD, monitoramento).
+- [x] Configurar variáveis de produção no Railway.
+- [x] Commitar/publicar a entrega.
 
 ---
 
@@ -346,7 +351,21 @@ git status --short -- . ':!**/node_modules/**'
   - `railway.json` roda `npm run migrate` no `preDeployCommand` e valida `/api/health`
 - **Ainda pendente:**
   - Migração dos dados do Supabase (Fase 0)
-  - Teste real no Railway + backup (Fase 5)
+  - Backup automatizado (Fase 5)
   - Mover horários/parâmetros/correções do localStorage para o PostgreSQL
 - **Status:** backend e frontend usam PostgreSQL/API; **não há mais Supabase no código**.
-- **Próximo passo:** Fase 0/5 (dados/deploy) ou persistir os auxiliares no banco.
+- **Próximo passo:** Fase 5 (persistir auxiliares) + Fase 6 (roles/auditoria).
+
+---
+
+## 13. Roadmap profissional (03/11/2026)
+
+Análise completa de lacunas vs. RHiD, Secullum e EzPoint Web: **[ROADMAP_PROFISSIONAL.md](ROADMAP_PROFISSIONAL.md)**.
+
+**Próximo sprint recomendado (P0):**
+
+1. **Fase 5** — migrar horários, parâmetros, departamentos, cargos, correções, dias descartados, equipamentos e push do `localStorage`/JSON para o PostgreSQL.
+2. **Fase 6** — aplicar roles (`admin`, `gestor`, `consulta`), auditoria em todas as mutações, tela de usuários e hardening HTTP.
+3. Depois: conformidade fiscal/folha (Fase 7), workflow/relatórios (Fase 8), mobile/portal (Fase 9) e operação/SaaS (Fase 10).
+
+**Critérios de “pronto para produção”** estão na seção 5 do roadmap.
