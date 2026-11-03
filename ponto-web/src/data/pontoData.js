@@ -343,25 +343,36 @@ export function excluirEquipamento(id) {
 export async function carregarMarcacoes() {
   let rows = await api.marcacoes.list({ limit: 50000 });
 
-  if ((!rows || rows.length === 0) && !jaMigrado('marcacoes')) {
+  if (!jaMigrado('marcacoes')) {
     const legado = lerCache('marcacoes', []);
     if (Array.isArray(legado) && legado.length > 0) {
-      try {
-        await api.marcacoes.import(legado.map((m) => ({
-          funcionario_id: m.funcionario_id || null,
-          nsr: m.nsr || null,
-          cpf: m.cpf || null,
-          pis: m.pis || null,
-          data: m.data,
-          hora: m.hora,
-          equip_id: m.equip_id || null,
-          equip_nome: m.equip_nome || null,
-          origem: m.origem || 'import',
-        })));
-        rows = await api.marcacoes.list({ limit: 50000 });
-      } catch {
-        // Sem rede: mantém o cache legado até a próxima carga.
-        return legado;
+      const chave = (m) => [
+        String(m.cpf || '').replace(/\D/g, ''),
+        String(m.pis || '').replace(/\D/g, ''),
+        m.data,
+        String(m.hora || '').slice(0, 5),
+      ].join(':');
+      const existentes = new Set((rows || []).map(chave));
+      const novas = legado.filter((m) => m.data && m.hora && !existentes.has(chave(m)));
+
+      if (novas.length > 0) {
+        try {
+          await api.marcacoes.import(novas.map((m) => ({
+            funcionario_id: m.funcionario_id || null,
+            nsr: m.nsr || null,
+            cpf: m.cpf || null,
+            pis: m.pis || null,
+            data: m.data,
+            hora: m.hora,
+            equip_id: m.equip_id || null,
+            equip_nome: m.equip_nome || null,
+            origem: m.origem || 'import',
+          })));
+          rows = await api.marcacoes.list({ limit: 50000 });
+        } catch {
+          // Sem rede: mantém o cache legado até a próxima carga.
+          return legado;
+        }
       }
     }
   }
