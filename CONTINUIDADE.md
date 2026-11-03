@@ -340,6 +340,10 @@ git status --short -- . ':!**/node_modules/**'
   - `LoginScreen`, `App`, `CadastrosTab`, `EmpresaSection`, `EquipamentoSection`, `ApuracaoTab` e `RelatoriosTab` usando a API
   - SDK `@supabase/supabase-js` removido do frontend
   - Build caiu de ~637 kB para ~453 kB
+- **Railway (03/11/2026):**
+  - `Dockerfile` na raiz builda o frontend e copia o `dist` para `ponto-cloud/public`
+  - O backend serve o frontend na mesma URL (sem segundo serviço/CORS)
+  - `railway.json` roda `npm run migrate` no `preDeployCommand` e valida `/api/health`
 - **Ainda pendente:**
   - Migração dos dados do Supabase (Fase 0)
   - Teste real no Railway + backup (Fase 5)
