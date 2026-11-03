@@ -160,7 +160,11 @@ Data: 03/11/2026
 
 ### Fase 5 — Consolidação de dados (1–2 semanas) — **P0**
 
-**Status (03/11/2026): em andamento — parte principal entregue.**
+**Status (03/11/2026): validado no Railway — resta apenas persistir o push.**
+
+> Correção importante encontrada pelo smoke test: o CRUD genérico listava sem
+> `id`. Corrigido em `de70ffc` (`SELECT id, ...`). Sem isso, edição/exclusão e
+> vínculos funcionário→horário quebravam.
 
 1. ✅ Migrar horários, parâmetros, departamentos, cargos, correções, dias descartados, marcações descartadas, equipamentos e histórico para o PostgreSQL.
 2. ✅ Remover `localStorage` como fonte de verdade (mantido apenas como cache/token).

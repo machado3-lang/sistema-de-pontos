@@ -265,15 +265,15 @@ CONTINUIDADE.md
 - [x] Fase 1b: criar Postgres no Railway e rodar `npm run migrate`.
 - [x] Fase 2: auth própria implementada (`/api/auth/login|me|logout|change-password`).
 - [x] Fase 3: CRUD multiempresa implementado (`/api/funcionarios`, `/api/empresas`, ...).
-- [ ] Fase 3b: rodar `npm run test:api` contra o Postgres real.
+- [x] Fase 3b: rodar `npm run test:api` contra o Postgres real (03/11/2026, 32 checks OK).
 - [x] Fase 4: trocar Supabase por `src/api.js` no frontend.
 - [x] Fase 4b: login validado no Railway.
-- [ ] Fase 4c: validar CRUD completo (funcionário, marcação, relatório) no Railway.
+- [x] Fase 4c: validar CRUD completo (funcionário, marcação, relatório) no Railway.
 - [ ] Fase 5: migrar auxiliares do `localStorage` + REP/push para o PostgreSQL.
   - [x] Horários, parâmetros, departamentos, cargos, correções, descartes, equipamentos e histórico.
   - [x] Marcações importadas via API.
   - [ ] Persistir push (`devices`/`events`/`results`) no PostgreSQL.
-  - [ ] Validar `npm run migrate` + `npm run test:api` no Railway.
+  - [x] Validar `npm run migrate` + `npm run test:api` no Railway (32 checks OK).
 - [ ] Fase 6: roles, auditoria e hardening.
 - [ ] Fase 7: conformidade fiscal e folha.
 - [ ] Fase 8: workflow e relatórios.
