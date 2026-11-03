@@ -55,6 +55,7 @@ let departamento = null;
 let feriado = null;
 let parametro = null;
 let equipamento = null;
+let empresaTeste = null;
 
 try {
   const login = await req('POST', '/api/auth/login', {
@@ -66,6 +67,35 @@ try {
   const me = await req('GET', '/api/auth/me', { token });
   if (!me.usuario?.id) throw new Error('me sem usuário');
   ok('auth/me');
+
+  const docEmpresa = String(Date.now()).padStart(14, '0').slice(-14);
+  empresaTeste = await req('POST', '/api/empresas', {
+    token,
+    body: {
+      razao_social: `Teste Empresa ${sufixo}`,
+      tipo_doc: 'CNPJ',
+      cpf_cnpj: docEmpresa,
+      cidade: 'Teste',
+      estado: 'SP',
+    },
+  });
+  ok('criar empresa');
+
+  const empresasList = await req('GET', '/api/empresas', { token });
+  if (!empresasList.some((e) => e.id === empresaTeste.id)) {
+    throw new Error('empresa criada não aparece na listagem');
+  }
+  ok('listar empresas');
+
+  await req('PUT', `/api/empresas/${empresaTeste.id}`, {
+    token,
+    body: { cidade: 'Teste atualizada' },
+  });
+  ok('atualizar empresa');
+
+  await req('DELETE', `/api/empresas/${empresaTeste.id}`, { token });
+  ok('excluir empresa');
+  empresaTeste = null;
 
   departamento = await req('POST', '/api/departamentos', {
     token,
@@ -283,6 +313,7 @@ try {
     if (horario && token) await req('DELETE', `/api/horarios/${horario.id}`, { token });
     if (parametro && token) await req('DELETE', `/api/parametros/${parametro.id}`, { token });
     if (equipamento && token) await req('DELETE', `/api/equipamentos/${equipamento.id}`, { token });
+    if (empresaTeste && token) await req('DELETE', `/api/empresas/${empresaTeste.id}`, { token });
     if (cargo && token) await req('DELETE', `/api/cargos/${cargo.id}`, { token });
     if (departamento && token) await req('DELETE', `/api/departamentos/${departamento.id}`, { token });
     if (feriado && token) await req('DELETE', `/api/feriados/${feriado.id}`, { token });

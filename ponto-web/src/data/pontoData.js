@@ -290,7 +290,7 @@ export function salvarHistHorarios(funcionarioId, historico) {
 const CAMPOS_EQUIPAMENTO = [
   'nome', 'modelo', 'num_serie', 'localizacao', 'tipo_conexao', 'ip', 'porta',
   'usuario', 'senha', 'cloud_url', 'api_key', 'cloud_rep_id', 'observacoes',
-  'portaria', 'ativo',
+  'portaria', 'ativo', 'empresa_id',
 ];
 
 export function equipamentoParaBanco(equipamento) {

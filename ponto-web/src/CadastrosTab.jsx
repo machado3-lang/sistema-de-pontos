@@ -101,6 +101,7 @@ export default function CadastrosTab() {
       horario_id: isUUID(form.horario_id) ? form.horario_id : null,
       parametro_id: isUUID(form.parametro_id) ? form.parametro_id : null,
     };
+    if (isUUID(form.empresa_id)) dados.empresa_id = form.empresa_id;
     if (form.senha) dados.senha = form.senha;
     return dados;
   };

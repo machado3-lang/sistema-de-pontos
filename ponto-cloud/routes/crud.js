@@ -30,7 +30,7 @@ async function insertRow(table, data, returning = '*') {
   return query(sql, keys.map((k) => data[k]));
 }
 
-async function updateRow(table, id, data, { scopeColumn, scopeValue, returning = '*' } = {}) {
+async function updateRow(table, id, data, { scopeColumn, scopeValue, scopeWhere, returning = '*' } = {}) {
   const keys = Object.keys(data);
   if (!keys.length) {
     const err = new Error('Nenhum campo informado');
@@ -41,7 +41,10 @@ async function updateRow(table, id, data, { scopeColumn, scopeValue, returning =
   const setSql = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
   params.push(id);
   let where = `id = $${params.length}`;
-  if (scopeColumn && scopeValue !== undefined && scopeValue !== null) {
+  if (scopeWhere) {
+    const clause = scopeWhere(params);
+    if (clause) where += ` AND ${clause}`;
+  } else if (scopeColumn && scopeValue !== undefined && scopeValue !== null) {
     params.push(scopeValue);
     where += ` AND ${scopeColumn} = $${params.length}`;
   }
@@ -49,14 +52,35 @@ async function updateRow(table, id, data, { scopeColumn, scopeValue, returning =
   return query(sql, params);
 }
 
-async function deleteRow(table, id, { scopeColumn, scopeValue } = {}) {
+async function deleteRow(table, id, { scopeColumn, scopeValue, scopeWhere } = {}) {
   const params = [id];
   let where = 'id = $1';
-  if (scopeColumn && scopeValue !== undefined && scopeValue !== null) {
+  if (scopeWhere) {
+    const clause = scopeWhere(params);
+    if (clause) where += ` AND ${clause}`;
+  } else if (scopeColumn && scopeValue !== undefined && scopeValue !== null) {
     params.push(scopeValue);
     where += ` AND ${scopeColumn} = $${params.length}`;
   }
   return query(`DELETE FROM ${table} WHERE ${where} RETURNING id`, params);
+}
+
+// Empresas visíveis para a conta: a raiz (tenant) e as empresas filhas.
+const EMPRESAS_DO_TENANT = (coluna, paramIndex) =>
+  `${coluna} IN (SELECT id FROM empresas WHERE tenant_id = $${paramIndex})`;
+
+/**
+ * Aceita `empresa_id` do corpo apenas se a empresa pertencer ao tenant.
+ * Caso contrário, mantém a empresa raiz.
+ */
+async function resolverEmpresa(raiz, solicitada) {
+  if (!raiz) return null;
+  if (!solicitada) return raiz;
+  const { rows } = await query(
+    'SELECT id FROM empresas WHERE id = $1 AND tenant_id = $2',
+    [solicitada, raiz]
+  );
+  return rows[0]?.id || raiz;
 }
 
 function empresaId(req, res) {
@@ -102,6 +126,7 @@ function simpleCrud({
   orderBy = 'created_at DESC',
   scopeColumn = 'empresa_id',
   scopeValue = (req) => req.usuario?.empresa_id ?? null,
+  scopeWhere,
   beforeCreate,
   beforeUpdate,
   allowCreate = true,
@@ -114,15 +139,21 @@ function simpleCrud({
   const select = ['id', ...columns, 'created_at'].join(', ');
   const scope = (req) => scopeValue(req);
 
+  // Empilha os parâmetros do escopo e devolve a cláusula SQL (ou null).
+  const pushScope = (req, params) => {
+    if (scopeWhere) return scopeWhere(req, params);
+    const sv = scope(req);
+    if (sv === null || sv === undefined) return null;
+    params.push(sv);
+    return `${scopeColumn} = $${params.length}`;
+  };
+
   router.get('/', async (req, res) => {
     try {
       const params = [];
       const where = [];
-      const sv = scope(req);
-      if (sv !== null && sv !== undefined) {
-        params.push(sv);
-        where.push(`${scopeColumn} = $${params.length}`);
-      }
+      const clausulaEscopo = pushScope(req, params);
+      if (clausulaEscopo) where.push(clausulaEscopo);
       for (const c of columns) {
         if (req.query[c] !== undefined && req.query[c] !== '') {
           params.push(req.query[c]);
@@ -145,11 +176,8 @@ function simpleCrud({
     try {
       const params = [req.params.id];
       let where = 'id = $1';
-      const sv = scope(req);
-      if (sv !== null && sv !== undefined) {
-        params.push(sv);
-        where += ` AND ${scopeColumn} = $${params.length}`;
-      }
+      const clausulaEscopo = pushScope(req, params);
+      if (clausulaEscopo) where += ` AND ${clausulaEscopo}`;
       const { rows } = await query(`SELECT ${select} FROM ${table} WHERE ${where} LIMIT 1`, params);
       if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
       res.json(rows[0]);
@@ -181,10 +209,10 @@ function simpleCrud({
       try {
         let data = pick(req.body, columns);
         if (beforeUpdate) data = await beforeUpdate(data, req);
-        const sv = scope(req);
         const { rows } = await updateRow(table, req.params.id, data, {
           scopeColumn,
-          scopeValue: sv,
+          scopeValue: scope(req),
+          scopeWhere: scopeWhere ? (params) => scopeWhere(req, params) : undefined,
         });
         if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
         res.json(rows[0]);
@@ -197,10 +225,10 @@ function simpleCrud({
   if (allowDelete) {
     router.delete('/:id', async (req, res) => {
       try {
-        const sv = scope(req);
         const { rows } = await deleteRow(table, req.params.id, {
           scopeColumn,
-          scopeValue: sv,
+          scopeValue: scope(req),
+          scopeWhere: scopeWhere ? (params) => scopeWhere(req, params) : undefined,
         });
         if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
         res.json({ ok: true });
@@ -228,7 +256,7 @@ function funcionariosRouter() {
       const empresa = empresaId(req, res);
       if (!empresa) return;
       const params = [empresa];
-      const where = ['f.empresa_id = $1'];
+      const where = [EMPRESAS_DO_TENANT('f.empresa_id', 1)];
 
       if (req.query.ativo !== undefined && req.query.ativo !== '') {
         params.push(req.query.ativo === 'true' || req.query.ativo === '1');
@@ -322,7 +350,7 @@ function funcionariosRouter() {
       const empresa = empresaId(req, res);
       if (!empresa) return;
       const { rows } = await query(
-        `SELECT ${select} ${joins} WHERE f.id = $1 AND f.empresa_id = $2 LIMIT 1`,
+        `SELECT ${select} ${joins} WHERE f.id = $1 AND ${EMPRESAS_DO_TENANT('f.empresa_id', 2)} LIMIT 1`,
         [req.params.id, empresa]
       );
       if (!rows[0]) return res.status(404).json({ error: 'Funcionário não encontrado' });
@@ -344,7 +372,7 @@ function funcionariosRouter() {
       }
 
       const data = {
-        empresa_id: empresa,
+        empresa_id: await resolverEmpresa(empresa, body.empresa_id),
         nome,
         cpf,
         pis: somenteDigitos(body.pis) || null,
@@ -365,7 +393,7 @@ function funcionariosRouter() {
 
       const { rows } = await insertRow('funcionarios', data, 'id');
       const { rows: full } = await query(
-        `SELECT ${select} ${joins} WHERE f.id = $1 AND f.empresa_id = $2`,
+        `SELECT ${select} ${joins} WHERE f.id = $1 AND ${EMPRESAS_DO_TENANT('f.empresa_id', 2)}`,
         [rows[0].id, empresa]
       );
       res.status(201).json(full[0]);
@@ -395,16 +423,21 @@ function funcionariosRouter() {
       }
       if (body.pis !== undefined) data.pis = somenteDigitos(body.pis) || null;
       if (body.senha !== undefined) data.senha_hash = body.senha ? await hashSenha(body.senha) : null;
+      if (body.empresa_id !== undefined) {
+        data.empresa_id = await resolverEmpresa(empresa, body.empresa_id);
+      }
 
       const { rows } = await updateRow('funcionarios', req.params.id, data, {
-        scopeColumn: 'empresa_id',
-        scopeValue: empresa,
+        scopeWhere: (params) => {
+          params.push(empresa);
+          return EMPRESAS_DO_TENANT('empresa_id', params.length);
+        },
         returning: 'id',
       });
       if (!rows[0]) return res.status(404).json({ error: 'Funcionário não encontrado' });
 
       const { rows: full } = await query(
-        `SELECT ${select} ${joins} WHERE f.id = $1 AND f.empresa_id = $2`,
+        `SELECT ${select} ${joins} WHERE f.id = $1 AND ${EMPRESAS_DO_TENANT('f.empresa_id', 2)}`,
         [rows[0].id, empresa]
       );
       res.json(full[0]);
@@ -418,8 +451,10 @@ function funcionariosRouter() {
       const empresa = empresaId(req, res);
       if (!empresa) return;
       const { rows } = await deleteRow('funcionarios', req.params.id, {
-        scopeColumn: 'empresa_id',
-        scopeValue: empresa,
+        scopeWhere: (params) => {
+          params.push(empresa);
+          return EMPRESAS_DO_TENANT('empresa_id', params.length);
+        },
       });
       if (!rows[0]) return res.status(404).json({ error: 'Funcionário não encontrado' });
       res.json({ ok: true });
@@ -927,15 +962,16 @@ export function createCadastrosRouter() {
       'cidade', 'estado', 'telefone', 'numero_folha', 'responsavel_nome',
       'responsavel_cpf', 'responsavel_telefone', 'responsavel_email', 'ativo',
     ],
-    scopeColumn: 'id',
+    // A conta (tenant) é a empresa raiz; a listagem mostra a raiz e as filhas.
+    scopeColumn: 'tenant_id',
     scopeValue: (req) => req.usuario?.empresa_id ?? null,
     orderBy: 'razao_social ASC',
-    // `empresas` é o próprio tenant: excluir quebraria o usuário. Multiempresa
-    // de verdade fica para a Fase 10.
+    // Excluir a raiz quebraria o usuário; filhas são removidas em rota própria.
     allowDelete: false,
-    beforeCreate: (data) => ({
+    beforeCreate: (data, req) => ({
       ...data,
       cpf_cnpj: somenteDigitos(data.cpf_cnpj),
+      tenant_id: req.usuario?.empresa_id ?? null,
     }),
     beforeUpdate: (data) => (
       data.cpf_cnpj !== undefined
@@ -943,6 +979,32 @@ export function createCadastrosRouter() {
         : data
     ),
   }));
+
+  // Remove uma empresa filha (nunca a raiz da conta).
+  router.delete('/empresas/:id', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      if (req.params.id === empresa) {
+        return res.status(400).json({ error: 'Não é possível excluir a empresa principal da conta' });
+      }
+      const { rows: vinculos } = await query(
+        'SELECT count(*)::int AS total FROM funcionarios WHERE empresa_id = $1',
+        [req.params.id]
+      );
+      if (vinculos[0]?.total > 0) {
+        return res.status(400).json({ error: 'Há funcionários vinculados a esta empresa' });
+      }
+      const { rows } = await query(
+        'DELETE FROM empresas WHERE id = $1 AND tenant_id = $2 RETURNING id',
+        [req.params.id, empresa]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'Empresa não encontrada' });
+      res.json({ ok: true });
+    } catch (e) {
+      tratarErro(res, e, 'empresas.delete');
+    }
+  });
 
   router.use('/departamentos', simpleCrud({
     table: 'departamentos',
@@ -974,9 +1036,26 @@ export function createCadastrosRouter() {
     columns: [
       'nome', 'modelo', 'num_serie', 'localizacao', 'tipo_conexao', 'ip',
       'porta', 'usuario', 'senha', 'cloud_url', 'api_key', 'cloud_rep_id',
-      'observacoes', 'portaria', 'ativo',
+      'observacoes', 'portaria', 'ativo', 'empresa_id',
     ],
     orderBy: 'nome ASC',
+    // Equipamentos da conta: raiz + empresas filhas.
+    scopeWhere: (req, params) => {
+      const raiz = req.usuario?.empresa_id;
+      if (!raiz) return null;
+      params.push(raiz);
+      return EMPRESAS_DO_TENANT('empresa_id', params.length);
+    },
+    beforeCreate: async (data, req) => ({
+      ...data,
+      empresa_id: await resolverEmpresa(req.usuario?.empresa_id, req.body?.empresa_id),
+    }),
+    beforeUpdate: async (data, req) => {
+      if (req.body?.empresa_id !== undefined) {
+        data.empresa_id = await resolverEmpresa(req.usuario?.empresa_id, req.body.empresa_id);
+      }
+      return data;
+    },
   }));
 
   // Rotas mais específicas primeiro para evitar conflito de prefixo.

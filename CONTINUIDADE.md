@@ -410,6 +410,15 @@ Análise completa de lacunas vs. RHiD, Secullum e EzPoint Web: **[ROADMAP_PROFIS
 
 - `ponto-cloud/db/migrations/002_hist_horarios.sql`
 - `ponto-cloud/db/migrations/003_equipamentos_campos.sql`
+- `ponto-cloud/db/migrations/004_empresas_tenant.sql`
+
+### Empresas por conta (correção)
+
+A empresa criada pelo usuário não aparecia porque a listagem filtrava
+`id = usuario.empresa_id`. A migration `004` adiciona `empresas.tenant_id`
+(a raiz aponta para si mesma; as filhas apontam para a raiz). A listagem agora
+usa `tenant_id = usuario.empresa_id`, e funcionários/equipamentos aceitam uma
+empresa filha desde que pertença à conta.
 
 ### Endpoints novos/ajustados
 
