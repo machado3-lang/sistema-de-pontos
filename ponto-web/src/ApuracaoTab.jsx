@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Search, AlertCircle, Clock, CheckCircle2, ChevronRight, Edit2, Calendar, Cpu } from 'lucide-react';
 import { carregarParametrosMap } from './cadastros/parametrosUtils';
 import { calcularPeriodo, formatMinutes as formatMinutos } from './engine/index.js';
-import { supabase } from './supabaseClient';
+import { api } from './api';
 
 function carregarLocal(key, padrao) {
   try { return JSON.parse(localStorage.getItem(key)) || padrao; } catch { return padrao; }
@@ -27,30 +27,27 @@ export default function ApuracaoTab() {
   const [marcacoesDescartadas, setMarcacoesDescartadas] = useState(() => carregarLocal('ponto_marcacoes_descartadas', {}));
 
   useEffect(() => {
-    supabase.from('funcionarios').select('*').then(({ data }) => {
-      if (data) setFuncionarios(data);
+    api.funcionarios.list().then((data) => {
+      if (Array.isArray(data)) setFuncionarios(data);
     }).catch(() => {
-      // Sem conexão com o Supabase: segue com o cache local.
+      // Sem conexão com o servidor: segue com o cache local.
     });
   }, []);
 
   const [marcacoes, setMarcacoes] = useState(() => carregarLocal('ponto_marcacoes', []));
   useEffect(() => {
-    supabase.from('marcacoes').select('*').order('id', { ascending: false }).limit(50000).then(({ data }) => {
-      if (data && data.length > 0) {
-        const locais = carregarLocal('ponto_marcacoes', []);
-        const existentes = new Set(locais.map(m => `${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
-        const novas = data.filter(m => !existentes.has(`${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
-        if (novas.length > 0) {
-          const merged = [...locais, ...novas];
-          try { localStorage.setItem('ponto_marcacoes', JSON.stringify(merged)); } catch {
-            // Cota do localStorage cheia: mantém em memória.
-          }
-          setMarcacoes(merged);
-        }
+    const locais = carregarLocal('ponto_marcacoes', []);
+    api.marcacoes.list({ limit: 50000 }).then((data) => {
+      const apiRows = Array.isArray(data) ? data : [];
+      const existentes = new Set(apiRows.map(m => `${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
+      const novas = locais.filter(m => !existentes.has(`${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
+      const merged = [...apiRows, ...novas];
+      setMarcacoes(merged);
+      try { localStorage.setItem('ponto_marcacoes', JSON.stringify(merged)); } catch {
+        // Cota do localStorage cheia: mantém em memória.
       }
     }).catch(() => {
-      // Sem conexão com o Supabase: segue com o cache local.
+      // Sem conexão com o servidor: segue com o cache local.
     });
   }, []);
   const horarios = useMemo(() => carregarLocal('ponto_horarios', []), []);
@@ -157,7 +154,7 @@ export default function ApuracaoTab() {
       }
     }
     return grouped;
-  }, [marcacoes, correcoes, diasDesconsiderados, marcacoesDescartadas, funcMap, horarios, parametrosMap, dataInicio, dataFim]);
+  }, [marcacoes, correcoes, diasDesconsiderados, marcacoesDescartadas, funcMap, funcionarios, horarios, parametrosMap, dataInicio, dataFim]);
 
   const pendencias = useMemo(() => {
     const list = [];

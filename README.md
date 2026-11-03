@@ -6,7 +6,8 @@ Sistema de ponto eletrônico compatível com as **Portarias 1510 (PIS)** e **671
 
 - **Frontend:** React 19 + Vite 8 (`ponto-web`)
 - **Backend:** Node.js 20 + Express (`ponto-cloud`)
-- **Banco:** Supabase (auth + funcionários/empresas/marcações) + JSON local no backend
+- **Banco:** PostgreSQL (Railway) + JSON local no backend (REPs/push)
+- **Autenticação:** própria (sessões no PostgreSQL + token mobile)
 - **Motor de cálculo:** JavaScript puro, unificado em `ponto-web/src/engine`
 - **Integração REP:** proxy FCGI + push server (iDClass/iDFace)
 
@@ -14,19 +15,21 @@ Sistema de ponto eletrônico compatível com as **Portarias 1510 (PIS)** e **671
 
 ```
 Navegador (React)
-  ├── Supabase Auth (login)
+  ├── api.js (sessão Bearer)
   ├── engine/ (cálculo de ponto)
   └── localStorage (cadastros auxiliares)
         │
         ▼
 ponto-cloud (Express)
+  ├── /api/auth/* (login, sessão, logout)
+  ├── /api/* (CRUD PostgreSQL)
   ├── /api/reps/* (proxy REP)
   ├── /api/mobile/* (login + marcação)
   ├── /push, /event (recebimento dos equipamentos)
-  └── data/database.json
+  └── data/database.json (legado REP/push)
         │
         ▼
-Supabase (funcionarios, empresas, marcacoes)
+PostgreSQL (Railway)
 ```
 
 ## Estrutura
@@ -35,8 +38,13 @@ Supabase (funcionarios, empresas, marcacoes)
 Pontoweb/
 ├── ponto-cloud/                 # Backend
 │   ├── server.js
-│   ├── migration_supabase.sql   # senha_hash + RLS
+│   ├── auth.js
+│   ├── db.js
+│   ├── routes/
+│   ├── db/                      # schema PostgreSQL + migrations
 │   └── Dockerfile
+├── Dockerfile                   # build do backend no Railway
+├── railway.json                 # deploy Railway (backend)
 ├── ponto-web/                   # Frontend
 │   ├── src/
 │   │   ├── engine/              # Motor de cálculo unificado
@@ -65,7 +73,7 @@ npm run migrate
 ADMIN_EMAIL=admin@empresa.com ADMIN_PASSWORD=uma-senha-forte npm run seed:admin
 npm run dev            # http://localhost:3100
 
-# Frontend (ainda usa Supabase até a Fase 4)
+# Frontend (API do PontoCloud)
 cd ponto-web
 npm install
 npm run dev            # http://localhost:5173 (proxy /api → 3100)
@@ -97,7 +105,6 @@ npm run build
 ```bash
 cp .env.example .env
 # preencha API_TOKEN, ADMIN_PASSWORD, MOBILE_TOKEN_SECRET, CORS_ORIGINS
-# e as VITE_SUPABASE_* (frontend atual)
 docker compose up -d --build postgres ponto-cloud ponto-web
 
 # Aplique a migration e crie o admin:

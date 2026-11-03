@@ -26,22 +26,24 @@ O sistema MultiPonto saiu de um MVP com credenciais fixas e cálculo duplicado p
 
 ### 2.1 Segurança (P0)
 
+> **Nota:** a tabela abaixo registra a fase P0 feita no Supabase. Em 03/11/2026 a autenticação/RLS foi substituída por **PostgreSQL + auth própria**; o estado atual está na seção 12.
+
 | Item | Onde | Situação |
 |---|---|---|
 | Remoção de `API_TOKEN` e `admin/admin` fixos | `ponto-cloud/server.js` | ✅ |
 | Token obrigatório em produção (falha fechada) | `server.js` | ✅ |
 | Login mobile validado no servidor | `POST /api/mobile/login` | ✅ |
 | Token mobile HMAC 8h + rate limit | `server.js` | ✅ |
-| Senha com hash PBKDF2 (cadastro) e scrypt (migração) | `CadastrosUtils.js`, `server.js` | ✅ |
-| Migração automática de senhas em texto puro | `migrarSenhasPlaintext` | ✅ |
+| Senha com hash scrypt (cadastro/migração) | `CadastrosUtils.js`, `auth.js` | ✅ |
+| Migração automática de senhas em texto puro | `auth.js` / primeiro login | ✅ |
 | Hora oficial do servidor na marcação | `POST /api/mobile/marcar` | ✅ |
-| RLS em `funcionarios`, `empresas`, `marcacoes` | `migration_supabase.sql` | ✅ |
-| Remoção de políticas anônimas | `migration_supabase.sql` | ✅ |
+| Sessões web opacas (hash em `sessoes`) | `auth.js`, `db/migrations/001_init.sql` | ✅ |
+| Isolamento por `empresa_id` no CRUD | `routes/crud.js` | ✅ |
 | Debug de CPF/estado removido dos relatórios | `RelatoriosTab.jsx` | ✅ |
 | CORS configurável | `CORS_ORIGINS` | ✅ |
-| Docker com build args do Supabase | `ponto-web/Dockerfile`, `docker-compose.yml` | ✅ |
+| Docker com build args do frontend | `ponto-web/Dockerfile`, `docker-compose.yml` | ✅ |
 
-**Pré-requisito operacional:** rodar `ponto-cloud/migration_supabase.sql` no Supabase e configurar `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` no backend. Sem isso o login mobile retorna 503.
+**Pré-requisito operacional:** configurar `DATABASE_URL` e rodar `npm run migrate` em `ponto-cloud`. Depois criar o admin com `npm run seed:admin`.
 
 ### 2.2 Motor de cálculo unificado
 
@@ -128,7 +130,7 @@ Em desenvolvimento, se `API_TOKEN`/`ADMIN_PASSWORD` não forem definidos, o back
 # 1. copie e preencha o .env
 cp .env.example .env
 
-# 2. rode a migration no Supabase (ou defina SUPABASE_DB_URL)
+# 2. rode a migration no PostgreSQL (npm run migrate ou preDeployCommand do Railway)
 
 # 3. suba o ponto (o compose já inclui o PostgreSQL local)
 docker compose up -d --build postgres ponto-cloud ponto-web
@@ -139,16 +141,14 @@ docker compose up -d --build postgres ponto-cloud ponto-web
 ### Variáveis obrigatórias em produção
 
 ```env
+DATABASE_URL=
+PGSSL=false
+SESSION_TTL_HOURS=8
 API_TOKEN=
 ADMIN_USER=admin
 ADMIN_PASSWORD=
 MOBILE_TOKEN_SECRET=
-SUPABASE_URL=
-SUPABASE_SERVICE_KEY=
-SUPABASE_DB_URL=          # opcional (migration automática)
 CORS_ORIGINS=
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
 VITE_PONTOCLOUD_URL=      # opcional; vazio usa /api via proxy
 ```
 
@@ -189,7 +189,7 @@ O Dashboard ainda calcula o saldo de preview com base fixa de 8h (`App.jsx`). Ap
 - Fluxo de aprovação da apuração (RHiD).
 - Geolocalização/anti-spoofing no mobile (EzPoint).
 - Compensação explícita de faltas/extras entre dias.
-- Testes de integração com Supabase e REP.
+- Testes de integração com PostgreSQL e REP.
 - Limpeza do repositório: `.gitignore` na raiz, remover `node_modules` do índice, commits organizados.
 - Code splitting do bundle (~650 kB).
 
@@ -212,7 +212,7 @@ O Dashboard ainda calcula o saldo de preview com base fixa de 8h (`App.jsx`). Ap
 ```
 ponto-cloud/
   server.js                     # API, auth, mobile, push, proxy REP
-  migration_supabase.sql        # senha_hash + RLS
+  db/                            # schema PostgreSQL + migrations
   Dockerfile
 
 ponto-web/
@@ -242,7 +242,7 @@ CONTINUIDADE.md
 - Endpoints de push continuam públicos.
 - CORS fica aberto se `CORS_ORIGINS` não for definido.
 - RLS não separa empresas (single-tenant).
-- Mobile depende de `SUPABASE_SERVICE_KEY` no backend.
+- Mobile depende do PostgreSQL configurado (`DATABASE_URL`).
 - A senha do próprio REP ainda fica no `localStorage` do cadastro de equipamentos.
 - `docker-compose.yml` tem serviços `face-*` sem diretório.
 - `node_modules` está versionado no Git e não há `.gitignore` na raiz.
@@ -266,10 +266,11 @@ CONTINUIDADE.md
 - [x] Fase 2: auth própria implementada (`/api/auth/login|me|logout|change-password`).
 - [x] Fase 3: CRUD multiempresa implementado (`/api/funcionarios`, `/api/empresas`, ...).
 - [ ] Fase 3b: rodar `npm run migrate` + `npm run test:api` contra um Postgres real.
-- [ ] Fase 4: trocar Supabase por `src/api.js` no frontend.
+- [x] Fase 4: trocar Supabase por `src/api.js` no frontend.
+- [ ] Fase 4b: validar login/CRUD real no Railway.
 - [ ] Fase 5: deploy, backup e testes.
 - [ ] Configurar `.env` de produção e testar `docker compose up` do ponto. *(depende do `.env`; Docker não encontrado no PATH desta máquina)*
-- [ ] Limpar repositório (`.gitignore`, remover `node_modules` do índice). *(confirmado: `.gitignore` ausente; 5.783 arquivos rastreados)*
+- [x] Limpar repositório (novo repo tem `.gitignore` e não versiona `node_modules`).
 - [ ] Commitar a entrega em blocos: segurança, motor, docs, Railway.
 
 ---
@@ -334,9 +335,14 @@ git status --short -- . ':!**/node_modules/**'
   - `ponto-cloud/db/migrations/001_init.sql` — schema
   - `ponto-cloud/db/migrate.js` e `seed-admin.js` — migrations/seed
   - `ponto-cloud/scripts/test-api.mjs` — smoke test (`npm run test:api`)
+- **Implementado no frontend (03/11/2026):**
+  - `ponto-web/src/api.js` — cliente HTTP com sessão Bearer
+  - `LoginScreen`, `App`, `CadastrosTab`, `EmpresaSection`, `EquipamentoSection`, `ApuracaoTab` e `RelatoriosTab` usando a API
+  - SDK `@supabase/supabase-js` removido do frontend
+  - Build caiu de ~637 kB para ~453 kB
 - **Ainda pendente:**
-  - Frontend usando a nova API (Fase 4)
   - Migração dos dados do Supabase (Fase 0)
   - Teste real no Railway + backup (Fase 5)
-- **Status:** backend PostgreSQL implementado; **o frontend ainda usa Supabase**.
-- **Próximo passo:** Fase 4 (`src/api.js`) ou Fase 0/5 (dados/deploy).
+  - Mover horários/parâmetros/correções do localStorage para o PostgreSQL
+- **Status:** backend e frontend usam PostgreSQL/API; **não há mais Supabase no código**.
+- **Próximo passo:** Fase 0/5 (dados/deploy) ou persistir os auxiliares no banco.

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabase } from './supabaseClient';
-import { isValidCPF, isUUID, carregarLocal, salvarLocal, getHistHorarios, salvarHistHorarios, hashSenhaMobile, Users, Building2, Clock, Briefcase, Cpu, Sliders } from './cadastros/CadastrosUtils';
+import { api } from './api';
+import { isValidCPF, isUUID, carregarLocal, salvarLocal, getHistHorarios, salvarHistHorarios, Users, Building2, Clock, Briefcase, Cpu, Sliders } from './cadastros/CadastrosUtils';
 import EmpresaSection from './cadastros/EmpresaSection';
 import HorarioSection from './cadastros/HorarioSection';
 import FuncionarioForm from './cadastros/FuncionarioForm';
@@ -16,7 +16,7 @@ export default function CadastrosTab() {
   const [funcionarios, setFuncionarios] = useState([]);
   const [departamentos, setDepartamentos] = useState(() => carregarLocal('ponto_departamentos', []));
   const [cargos, setCargos] = useState(() => carregarLocal('ponto_cargos', []));
-  const [parametrosSets, setParametrosSets] = useState(() => carregarLocal('ponto_parametros_list', []));
+  const [parametrosSets] = useState(() => carregarLocal('ponto_parametros_list', []));
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [editandoId, setEditandoId] = useState(null);
@@ -39,26 +39,39 @@ export default function CadastrosTab() {
       }
     }
     if (removeuSenha) salvarLocal('ponto_func_extras', extras);
+
     return funcs.map(f => {
-      const extrasSemSenha = { ...(extras[f.id] || {}) };
-      delete extrasSemSenha.senha;
-      return { ...extrasSemSenha, id: f.id, nome: f.nome, cpf: f.cpf, pis: f.pis, foto: extrasSemSenha.foto || '', data_admissao: f.data_admissao, created_at: f.created_at };
+      const safe = { ...f };
+      delete safe.senha_hash;
+      const ex = { ...(extras[f.id] || {}) };
+      delete ex.senha;
+      return {
+        ...ex,
+        ...safe,
+        departamento: ex.departamento || f.departamento_id || '',
+        cargo: ex.cargo || f.cargo_id || '',
+        horario_id: ex.horario_id || f.horario_id || '',
+        parametro_id: ex.parametro_id || f.parametro_id || '',
+        foto: f.foto || ex.foto || '',
+        ativo: f.ativo !== false,
+      };
     });
   };
 
   useEffect(() => {
     (async () => {
-      const { data: func } = await supabase.from('funcionarios').select('*');
-      if (func) setFuncionarios(mergeFuncExtras(func));
-      const { data: emp } = await supabase.from('empresas').select('*');
-      if (emp) {
-        setEmpresas(prev => {
-          const locais = prev.filter(e => !isUUID(String(e.id)));
-          const supabaseIds = new Set(emp.map(e => e.id));
-          return [...emp, ...locais.filter(e => !supabaseIds.has(e.id))];
-        });
+      try {
+        const [func, emp] = await Promise.all([
+          api.funcionarios.list(),
+          api.empresas.list(),
+        ]);
+        if (Array.isArray(func)) setFuncionarios(mergeFuncExtras(func));
+        if (Array.isArray(emp)) setEmpresas(emp);
+      } catch (e) {
+        console.error('Erro ao carregar cadastros:', e.message);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, []);
   useEffect(() => { salvarLocal('ponto_empresas', empresas); }, [empresas]);
@@ -82,17 +95,18 @@ export default function CadastrosTab() {
   };
 
   const carregarDadosBase = async () => {
-    const { data: func } = await supabase.from('funcionarios').select('*');
-    if (func) setFuncionarios(mergeFuncExtras(func));
-    const { data: emp } = await supabase.from('empresas').select('*');
-    if (emp) {
-      setEmpresas(prev => {
-        const locais = prev.filter(e => !isUUID(String(e.id)));
-        const supabaseIds = new Set(emp.map(e => e.id));
-        return [...emp, ...locais.filter(e => !supabaseIds.has(e.id))];
-      });
+    try {
+      const [func, emp] = await Promise.all([
+        api.funcionarios.list(),
+        api.empresas.list(),
+      ]);
+      if (Array.isArray(func)) setFuncionarios(mergeFuncExtras(func));
+      if (Array.isArray(emp)) setEmpresas(emp);
+    } catch (e) {
+      console.error('Erro ao recarregar cadastros:', e.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const resetForm = () => {
@@ -109,18 +123,32 @@ export default function CadastrosTab() {
     const jaExiste = histHorarios.some(h => h.horario_id === form.horario_id && h.data_inicio === form.data_inicio);
     const histAtual = form.horario_id && form.data_inicio && !jaExiste ? [...histHorarios, { horario_id: form.horario_id, data_inicio: form.data_inicio }] : histHorarios;
     const empRef = form.empresa_id || '';
-    const dadosFunc = { nome: form.nome, cpf: cpfLimpo, pis: form.pis, data_admissao: form.data_admissao || null };
-    if (form.senha) dadosFunc.senha_hash = await hashSenhaMobile(form.senha);
+    const dadosFunc = {
+      nome: form.nome,
+      cpf: cpfLimpo,
+      pis: form.pis || null,
+      matricula: form.matricula || null,
+      folha: form.folha || null,
+      foto: form.foto || null,
+      data_admissao: form.data_admissao || null,
+      data_demissao: form.data_demissao || null,
+      motivo_demissao: form.motivo_demissao || null,
+      data_inicio: form.data_inicio || null,
+      ativo: form.ativo !== false,
+    };
+    if (form.senha) dadosFunc.senha = form.senha;
     if (isUUID(empRef)) dadosFunc.empresa_id = empRef;
-    const { data, error } = await supabase.from('funcionarios').insert([dadosFunc]);
-    if (error) { alert("Erro ao salvar: " + error.message); return; }
-    if (data && data[0]) {
-      salvarHistHorarios(data[0].id, histAtual);
-      salvarExtras(data[0].id, form);
+
+    try {
+      const data = await api.funcionarios.create(dadosFunc);
+      salvarHistHorarios(data.id, histAtual);
+      salvarExtras(data.id, form);
+      resetForm();
+      carregarDadosBase();
+      setSubTab('lista_func');
+    } catch (e) {
+      alert('Erro ao salvar: ' + e.message);
     }
-    resetForm();
-    carregarDadosBase();
-    setSubTab('lista_func');
   };
 
   const handleEditarFuncionario = (func) => {
@@ -138,25 +166,44 @@ export default function CadastrosTab() {
     const jaExiste = histHorarios.some(h => h.horario_id === form.horario_id && h.data_inicio === form.data_inicio);
     const histAtual = form.horario_id && form.data_inicio && !jaExiste ? [...histHorarios, { horario_id: form.horario_id, data_inicio: form.data_inicio }] : histHorarios;
     const empRef = form.empresa_id || '';
-    const dadosFunc = { nome: form.nome, cpf: cpfLimpo, pis: form.pis, data_admissao: form.data_admissao || null };
-    if (form.senha) dadosFunc.senha_hash = await hashSenhaMobile(form.senha);
+    const dadosFunc = {
+      nome: form.nome,
+      cpf: cpfLimpo,
+      pis: form.pis || null,
+      matricula: form.matricula || null,
+      folha: form.folha || null,
+      foto: form.foto || null,
+      data_admissao: form.data_admissao || null,
+      data_demissao: form.data_demissao || null,
+      motivo_demissao: form.motivo_demissao || null,
+      data_inicio: form.data_inicio || null,
+      ativo: form.ativo !== false,
+    };
+    if (form.senha) dadosFunc.senha = form.senha;
     if (isUUID(empRef)) dadosFunc.empresa_id = empRef;
-    const { error } = await supabase.from('funcionarios').update(dadosFunc).eq('id', editandoId);
-    if (error) { alert("Erro ao atualizar: " + error.message); return; }
-    salvarExtras(editandoId, form);
-    salvarHistHorarios(editandoId, histAtual);
-    resetForm();
-    carregarDadosBase();
-    setSubTab('lista_func');
+
+    try {
+      await api.funcionarios.update(editandoId, dadosFunc);
+      salvarExtras(editandoId, form);
+      salvarHistHorarios(editandoId, histAtual);
+      resetForm();
+      carregarDadosBase();
+      setSubTab('lista_func');
+    } catch (e) {
+      alert('Erro ao atualizar: ' + e.message);
+    }
   };
 
   const handleExcluirFuncionario = async (id) => {
-    const { error } = await supabase.from('funcionarios').delete().eq('id', id);
-    if (error) { alert("Erro ao excluir: " + error.message); return; }
-    const extras = carregarLocal('ponto_func_extras', {});
-    delete extras[id];
-    salvarLocal('ponto_func_extras', extras);
-    carregarDadosBase();
+    try {
+      await api.funcionarios.remove(id);
+      const extras = carregarLocal('ponto_func_extras', {});
+      delete extras[id];
+      salvarLocal('ponto_func_extras', extras);
+      carregarDadosBase();
+    } catch (e) {
+      alert('Erro ao excluir: ' + e.message);
+    }
   };
 
   const handleCancel = () => {

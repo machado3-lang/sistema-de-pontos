@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { FileText, Download, Users, Printer, Eye, EyeOff } from 'lucide-react';
 import { carregarParametrosMap, formatMinutos, calcMinutos } from './cadastros/parametrosUtils';
 import { calcularPeriodo } from './engine/index.js';
-import { supabase } from './supabaseClient';
+import { api } from './api';
 
 function carregarLocal(key, padrao) {
   try { return JSON.parse(localStorage.getItem(key)) || padrao; } catch { return padrao; }
@@ -127,24 +127,16 @@ export default function RelatoriosTab() {
   });
   const [selectedEmpresaId, setSelectedEmpresaId] = useState('');
 
-  const isUUID = (val) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(val));
-
   useEffect(() => {
-    import('./supabaseClient').then(({ supabase }) => {
-      supabase.from('funcionarios').select('*').then(({ data }) => {
-        if (data) setFuncionarios(data);
-      });
-      supabase.from('empresas').select('*').then(({ data }) => {
-        if (data) {
-          setEmpresas(prev => {
-            const locais = prev.filter(e => !isUUID(String(e.id)));
-            const supabaseIds = new Set(data.map(e => e.id));
-            return [...data, ...locais.filter(e => !supabaseIds.has(e.id))];
-          });
-        }
-      });
+    api.funcionarios.list().then((data) => {
+      if (Array.isArray(data)) setFuncionarios(data);
     }).catch(() => {
-      // Sem conexão com o Supabase: mantém os dados locais.
+      // Sem conexão com o servidor: mantém os dados locais.
+    });
+    api.empresas.list().then((data) => {
+      if (Array.isArray(data)) setEmpresas(data);
+    }).catch(() => {
+      // Sem conexão com o servidor: mantém os dados locais.
     });
   }, []);
 
@@ -162,22 +154,15 @@ export default function RelatoriosTab() {
   const [marcacoes, setMarcacoes] = useState(() => carregarLocal('ponto_marcacoes', []));
   const syncMarcacoes = useCallback(() => {
     const locais = carregarLocal('ponto_marcacoes', []);
-    supabase.from('marcacoes').select('*').order('id', { ascending: false }).limit(50000).then(({ data }) => {
-      if (data && data.length > 0) {
-        const existentes = new Set(locais.map(m => `${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
-        const novas = data.filter(m => !existentes.has(`${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
-        if (novas.length > 0) {
-          const merged = [...locais, ...novas];
-          try { localStorage.setItem('ponto_marcacoes', JSON.stringify(merged)); } catch {
-            // Cota do localStorage cheia: mantém em memória.
-          }
-          setMarcacoes(merged);
-        } else {
-          setMarcacoes(locais);
-        }
-      } else {
-        setMarcacoes(locais);
+    api.marcacoes.list({ limit: 50000 }).then((data) => {
+      const apiRows = Array.isArray(data) ? data : [];
+      const existentes = new Set(apiRows.map(m => `${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
+      const novas = locais.filter(m => !existentes.has(`${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
+      const merged = [...apiRows, ...novas];
+      try { localStorage.setItem('ponto_marcacoes', JSON.stringify(merged)); } catch {
+        // Cota do localStorage cheia: mantém em memória.
       }
+      setMarcacoes(merged);
     }).catch(() => {
       setMarcacoes(locais);
     });

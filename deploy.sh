@@ -9,12 +9,16 @@ CONFIG_FILE=".env.prod"
 if [ ! -f "$CONFIG_FILE" ]; then
   echo "Criando $CONFIG_FILE... (preencha com suas credenciais)"
   cat > "$CONFIG_FILE" << EOF
-# Supabase
-VITE_SUPABASE_URL=https://seu-projeto.supabase.co
-VITE_SUPABASE_ANON_KEY=sua-chave-anon
+# PostgreSQL (Railway ou local)
+DATABASE_URL=postgresql://usuario:senha@host:5432/pontoweb
+PGSSL=false
 
-# PontoCloud
-API_TOKEN=ponto-cloud-token-producao
+# PontoCloud / Auth
+API_TOKEN=gere-um-token-forte
+ADMIN_USER=admin
+ADMIN_PASSWORD=gere-uma-senha-forte
+MOBILE_TOKEN_SECRET=gere-outro-segredo
+CORS_ORIGINS=http://localhost
 EOF
   echo "Arquivo $CONFIG_FILE criado. Edite com suas credenciais e execute novamente."
   exit 1
@@ -22,9 +26,13 @@ fi
 
 source "$CONFIG_FILE"
 
-export VITE_SUPABASE_URL
-export VITE_SUPABASE_ANON_KEY
+export DATABASE_URL
+export PGSSL
 export API_TOKEN
+export ADMIN_USER
+export ADMIN_PASSWORD
+export MOBILE_TOKEN_SECRET
+export CORS_ORIGINS
 
 echo ""
 echo "1/4 - Buildando ponto-web..."

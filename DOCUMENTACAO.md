@@ -4,7 +4,7 @@
 
 Sistema completo para gestão de ponto eletrônico, compatível com as **Portarias 1510 (PIS)** e **671 (CPF)** do MTP. Permite cadastro de empresas, funcionários, horários, REPs (Relógios Eletrônicos de Ponto), importação e apuração de batidas, e sincronização bidirecional com equipamentos iDClass/iDFace.
 
-**Arquitetura:** Frontend React + Vite (`ponto-web`) | Backend Node.js + Express (`ponto-cloud`) | Banco: Supabase (remoto) + JSON (local no cloud) + localStorage (no navegador).
+**Arquitetura:** Frontend React + Vite (`ponto-web`) | Backend Node.js + Express (`ponto-cloud`) | Banco: PostgreSQL (Railway) + JSON local (REPs/push) + localStorage (cadastros auxiliares).
 
 ---
 
@@ -28,15 +28,15 @@ Pontos/
     ├── index.html             # Entrypoint HTML
     ├── vite.config.js         # Config Vite (proxy /api → :3100)
     ├── nginx.conf             # Config Nginx para Docker
-    ├── package.json           # Dependências: react, supabase, lucide-react
+    ├── package.json           # Dependências: react, lucide-react
     ├── Dockerfile             # Multi-stage: build Node + Nginx
     ├── src/
     │   ├── main.jsx           # Bootstrap React
     │   ├── App.jsx            # Componente raiz (auth, layout, rotas)
     │   ├── App.css            # Estilos legados (pouco usados)
     │   ├── index.css          # Design system completo (dark mode, glassmorphism)
-    │   ├── LoginScreen.jsx    # Tela de login (via Supabase Auth)
-    │   ├── supabaseClient.js  # Cliente Supabase initializado
+    │   ├── LoginScreen.jsx    # Tela de login (via API do PontoCloud)
+    │   ├── api.js             # Cliente HTTP (sessão Bearer)
     │   ├── PontoEngine.js     # Compatibilidade: reexporta o motor unificado
     │   ├── engine/            # Motor de cálculo unificado (fonte única)
     │   │   ├── time.js        # Datas, minutos, feriados e janela noturna
@@ -189,7 +189,7 @@ Comandos implementados: `login`, `get_about`, `get_info`, `get_system_informatio
 ### Tecnologias
 - **React 19** — biblioteca de UI
 - **Vite 8** — bundler e dev server
-- **@supabase/supabase-js** — autenticação e banco
+- **API do PontoCloud** — autenticação e dados (via `src/api.js`)
 - **lucide-react** — ícones
 
 ### Inicialização
@@ -234,8 +234,8 @@ npm run lint     # ESLint
 - Área reservada para geração de espelho de ponto PDF e exportação AFD/AFDT
 
 ### Autenticação
-- Login via **Supabase Auth** (email/senha)
-- Sessão persistente (getSession + onAuthStateChange)
+- Login via **API do PontoCloud** (e-mail/senha; sessão Bearer em `sessoes`)
+- Sessão persistente com token em `localStorage` e validação em `/api/auth/me`
 - Tela de login com design institucional
 
 ### Motor de Cálculo (PontoEngine.js)
@@ -253,9 +253,7 @@ O frontend usa **localStorage** para dados complementares:
 - `ponto_hist_horarios` — histórico de horários por funcionário
 
 ### Variáveis de Ambiente
-- `VITE_SUPABASE_URL` — URL do projeto Supabase
-- `VITE_SUPABASE_ANON_KEY` — Chave anônima do Supabase
-- `VITE_PONTOCLOUD_URL` — URL do backend (usada em docker)
+- `VITE_PONTOCLOUD_URL` — URL do backend (vazio usa `/api` via proxy)
 
 ---
 
@@ -287,11 +285,17 @@ Configuração manual no Render: root dir = `ponto-cloud`, start = `npm start`, 
 
 ## BANCO DE DADOS
 
-### Supabase (tabelas)
-- `funcionarios`: id (uuid), nome, cpf, pis, data_admissao, empresa_id (uuid), created_at
-- `empresas` (opcional): id (uuid), razao_social, cpf_cnpj, ...
+### PostgreSQL (tabelas principais)
+Schema: `ponto-cloud/db/migrations/001_init.sql`.
 
-### JSON local (ponto-cloud/data/database.json)
+- `empresas`, `usuarios`, `sessoes`
+- `funcionarios`, `departamentos`, `cargos`
+- `horarios` (`config jsonb`), `parametros` (`config jsonb`)
+- `equipamentos`
+- `marcacoes`, `correcoes`, `dias_descartados`, `marcacoes_descartadas`, `banco_horas_ajustes`
+- `feriados`, `auditoria`, `schema_migrations`
+
+### JSON local (ponto-cloud/data/database.json — legado REP/push)
 Estrutura:
 ```json
 {
@@ -355,14 +359,14 @@ As credenciais **não ficam mais fixas no código**. Configure no `.env` (raiz) 
 
 | Variável | Onde | Obrigatória em produção | Observação |
 |---|---|---|---|
-| `API_TOKEN` | backend | Sim | Token das rotas `/api/reps/*`; sem ele o backend não inicia em produção |
-| `ADMIN_USER` / `ADMIN_PASSWORD` | backend | Recomendado | Usadas por `/api/auth/login`; sem senha o login admin fica desabilitado |
-| `SUPABASE_URL` | backend | Sim (mobile) | URL do projeto Supabase |
-| `SUPABASE_SERVICE_KEY` | backend | Sim (mobile) | Service role key (nunca use prefixo `VITE_`) |
-| `SUPABASE_DB_URL` | backend | Opcional | Habilita a migration automática no boot |
-| `MOBILE_TOKEN_SECRET` | backend | Recomendado | Assina os tokens do app mobile; se ausente, muda a cada reinício |
+| `DATABASE_URL` | backend | Sim | PostgreSQL (Railway injeta) |
+| `PGSSL` / `PG_POOL_MAX` | backend | Opcional | SSL e tamanho do pool |
+| `SESSION_TTL_HOURS` | backend | Opcional | Validade da sessão web (padrão 8h) |
+| `API_TOKEN` | backend | Sim | Token das rotas `/api/reps/*` e `/api/push/*`; sem ele o backend não inicia em produção |
+| `ADMIN_USER` / `ADMIN_PASSWORD` | backend | Recomendado | Login admin legado em `/api/admin/login` |
+| `MOBILE_TOKEN_SECRET` | backend | Recomendado | Assina os tokens mobile; se ausente, muda a cada reinício |
 | `CORS_ORIGINS` | backend | Sim | Lista de origens permitidas, separadas por vírgula |
-| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | build do frontend | Sim | Passadas como build args no Docker |
+| `VITE_PONTOCLOUD_URL` | build do frontend | Opcional | Vazio usa `/api` via proxy |
 
 Gere os segredos com:
 ```bash
@@ -371,19 +375,15 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ### Migration obrigatória
 
-Execute `ponto-cloud/migration_supabase.sql` no SQL Editor do Supabase (ou defina `SUPABASE_DB_URL` para o backend executar no boot). Ela:
+Execute `npm run migrate` em `ponto-cloud` (ou deixe o `preDeployCommand` do Railway rodar). O schema está em `ponto-cloud/db/migrations/001_init.sql` e cria empresas, usuários, sessões, funcionários, horários, parâmetros, marcações, correções, banco de horas, feriados e auditoria.
 
-- adiciona `funcionarios.senha_hash`;
-- habilita **RLS** em `funcionarios`, `empresas` e `marcacoes`;
-- remove políticas anônimas dessas tabelas;
-- mantém acesso apenas para usuários autenticados (frontend) e `service_role` (backend).
+O `ponto-cloud/migration_supabase.sql` é **legado**, apenas para exportar dados antigos do Supabase.
 
 ### App mobile
 
-- O login agora é validado **no backend** (`POST /api/mobile/login`), não mais no navegador.
-- A senha é gravada como hash **PBKDF2** (cadastro) ou **scrypt** (migração automática de senhas antigas em texto puro).
+- O login é validado **no backend** (`POST /api/mobile/login`) contra o PostgreSQL.
+- A senha é gravada como hash **scrypt**; hashes PBKDF2/scrypt antigos continuam aceitos.
 - A marcação (`POST /api/mobile/marcar`) usa a **hora do servidor** (America/Sao_Paulo) e um token HMAC de 8 horas.
-- Senhas legadas em texto puro são migradas automaticamente no boot (`migrarSenhasPlaintext`).
 
 ### Pontos de atenção
 
@@ -472,8 +472,8 @@ Cobrem: dia normal, HE com faixas, tolerância CLT e simples, falta de dia intei
 
 ## Observações Finais
 
-- O frontend requer conexão com Supabase para autenticação e dados de funcionários
-- O backend **não requer** Supabase — usa JSON file storage
+- O frontend consome a API do PontoCloud (PostgreSQL) via `src/api.js`
+- O backend usa PostgreSQL para auth/CRUD e JSON local apenas para REPs/push
 - Toda a apuração de ponto roda **offline** no navegador
 - Para desenvolvimento, use `npm run dev` em ambos os projetos simultaneamente
 - Para produção, use Docker Compose ou deploy separado (Vercel + Render)

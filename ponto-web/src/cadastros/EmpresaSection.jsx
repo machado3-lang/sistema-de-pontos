@@ -1,13 +1,12 @@
-import { useState, useContext } from 'react';
+import { useState } from 'react';
 import { Building } from 'lucide-react';
 import {
   formatCPF, formatCNPJ, formatCEP, formatPhone,
   isValidCPF, isValidCNPJ,
-  nextId,
   ESTADOS_BR,
   Plus, Building2, X, Save, Search, Edit2, Trash2, Users
 } from './CadastrosUtils';
-import { supabase } from '../supabaseClient';
+import { api } from '../api';
 import { useToast } from '../components/Toast';
 
 export default function EmpresaSection({ empresas, setEmpresas, subTab, setSubTab, funcionarios = [] }) {
@@ -41,16 +40,14 @@ export default function EmpresaSection({ empresas, setEmpresas, subTab, setSubTa
       return;
     }
     setDocEmpError('');
-    const { data, error } = await supabase.from('empresas').insert([{ razao_social: empForm.razao_social, cpf_cnpj: empForm.cpf_cnpj }]).select();
-    if (error) {
-      toast("Erro ao salvar no banco: " + error.message, "error");
-      const nova = { id: nextId(), ...empForm };
-      setEmpresas(prev => [...prev, nova]);
-    } else if (data && data[0]) {
-      setEmpresas(prev => [...prev, { ...empForm, id: data[0].id }]);
+    try {
+      const data = await api.empresas.create({ ...empForm, cpf_cnpj: docLimpo });
+      setEmpresas(prev => [...prev, data]);
+      resetEmpForm();
+      setSubTab('empresas');
+    } catch (e) {
+      toast('Erro ao salvar empresa: ' + e.message, 'error');
     }
-    resetEmpForm();
-    setSubTab('empresas');
   };
 
   const handleEditarEmpresa = (emp) => {
@@ -87,28 +84,28 @@ export default function EmpresaSection({ empresas, setEmpresas, subTab, setSubTa
       return;
     }
     setDocEmpError('');
-    setEmpresas(prev => prev.map(e => e.id === editandoEmpId ? { ...e, ...empForm } : e));
-    if (typeof editandoEmpId === 'string' && editandoEmpId.includes('-')) {
-      const { error } = await supabase.from('empresas').update({ razao_social: empForm.razao_social, cpf_cnpj: empForm.cpf_cnpj }).eq('id', editandoEmpId);
-      if (error) toast("Erro ao atualizar no banco: " + error.message, "error");
+    try {
+      const data = await api.empresas.update(editandoEmpId, { ...empForm, cpf_cnpj: docLimpo });
+      setEmpresas(prev => prev.map(e => e.id === editandoEmpId ? data : e));
+      resetEmpForm();
+      setSubTab('empresas');
+    } catch (e) {
+      toast('Erro ao atualizar empresa: ' + e.message, 'error');
     }
-    resetEmpForm();
-    setSubTab('empresas');
   };
 
   const handleExcluirEmpresa = async (id, nome) => {
     const vinculados = funcionarios.filter(f => String(f.empresa_id || '') === String(id));
     if (vinculados.length > 0) {
-      if (!window.confirm(`A empresa "${nome}" possui ${vinculados.length} funcionário${vinculados.length > 1 ? 's' : ''} vinculado${vinculados.length > 1 ? 's' : ''}. Excluir a empresa também removerá o vínculo destes funcionários. Deseja continuar?`)) {
-        return;
-      }
-    } else {
-      if (!window.confirm(`Excluir empresa "${nome}"?`)) return;
+      toast(`Não é possível excluir "${nome}": há ${vinculados.length} funcionário(s) vinculado(s).`, 'error');
+      return;
     }
-    setEmpresas(prev => prev.filter(e => e.id !== id));
-    if (typeof id === 'string' && id.includes('-')) {
-      const { error } = await supabase.from('empresas').delete().eq('id', id);
-      if (error) toast("Erro ao excluir do banco: " + error.message, "error");
+    if (!window.confirm(`Excluir empresa "${nome}"?`)) return;
+    try {
+      await api.empresas.remove(id);
+      setEmpresas(prev => prev.filter(e => e.id !== id));
+    } catch (e) {
+      toast('Erro ao excluir empresa: ' + e.message, 'error');
     }
   };
 

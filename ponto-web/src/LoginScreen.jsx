@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Clock, LogIn, Lock, Building, AlertCircle } from 'lucide-react';
-import { supabase } from './supabaseClient';
+import { api, setToken } from './api';
 
 export default function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState('');
@@ -12,18 +12,19 @@ export default function LoginScreen({ onLogin }) {
     e.preventDefault();
     setLoading(true);
     setErrorMsg('');
-    
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
 
-    if (error) {
-      setErrorMsg('Credenciais inválidas ou e-mail não cadastrado.');
+    try {
+      const data = await api.auth.login(email, password);
+      setToken(data.token);
       setLoading(false);
-    } else {
+      onLogin(data.usuario);
+    } catch (err) {
+      setErrorMsg(
+        err.status === 401
+          ? 'Credenciais inválidas.'
+          : (err.message || 'Erro ao entrar. Tente novamente.')
+      );
       setLoading(false);
-      onLogin(); // Comunica ao App que autenticou
     }
   };
 

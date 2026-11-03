@@ -7,7 +7,7 @@
 ### Tecnologias
 
 - **Frontend**: React 19 + Vite
-- **Backend/Autenticação**: Supabase
+- **Backend/Autenticação**: API do PontoCloud (PostgreSQL)
 - **Estilização**: CSS customizado com design glassmorphism
 - **Ícones**: Lucide React
 
@@ -17,8 +17,8 @@
 
 ### 1. Autenticação
 
-- Login com e-mail e senha via Supabase Auth
-- Sessão persistente com verificação automática
+- Login com e-mail e senha via API do PontoCloud
+- Sessão persistente com token Bearer
 - Logout seguro
 
 ### 2. Dashboard Central
@@ -103,15 +103,15 @@ ponto-web/
 │   ├── LoginScreen.jsx     # Tela de autenticação
 │   ├── CadastrosTab.jsx    # Módulo de cadastros
 │   ├── ApuracaoTab.jsx     # Módulo de apuração
-│   ├── PontoEngine.js      # Motor de cálculo
-│   ├── supabaseClient.js   # Cliente Supabase
+│   ├── PontoEngine.js      # Compatibilidade do motor de cálculo
+│   ├── api.js              # Cliente da API PontoCloud
 │   ├── main.jsx            # Entry point
 │   ├── index.css           # Estilos globais
 │   └── App.css             # Estilos do App
 ├── index.html
 ├── package.json
 ├── vite.config.js
-└── .env.local              # Variáveis de ambiente
+└── .env.local              # Opcional (VITE_PONTOCLOUD_URL)
 ```
 
 ---
@@ -120,12 +120,13 @@ ponto-web/
 
 ### Variáveis de Ambiente
 
-Crie um arquivo `.env.local` com:
+Opcional — crie `.env.local` se o backend estiver em outro domínio:
 
 ```env
-VITE_SUPABASE_URL=sua_url_do_supabase
-VITE_SUPABASE_ANON_KEY=sua_chave_anonima
+VITE_PONTOCLOUD_URL=https://seu-backend.up.railway.app
 ```
+
+Vazio usa `/api` via proxy do Vite/Nginx.
 
 ### Instalação e Execução
 

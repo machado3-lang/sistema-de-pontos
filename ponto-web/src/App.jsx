@@ -17,7 +17,7 @@ import ApuracaoTab from './ApuracaoTab';
 import RelatoriosTab from './RelatoriosTab';
 import LoginScreen from './LoginScreen';
 import MobileMarcacao from './MobileMarcacao';
-import { supabase } from './supabaseClient';
+import { api, getToken, clearToken } from './api';
 import { carregarLocal, salvarLocal } from './cadastros/CadastrosUtils';
 import { ToastProvider } from './components/Toast';
 
@@ -29,9 +29,9 @@ function DashboardLayout({ onLogout }) {
   const [funcionarios, setFuncionarios] = useState([]);
 
   useEffect(() => {
-    supabase.from('funcionarios').select('*').then(({ data }) => {
-      if (data) setFuncionarios(data);
-    }).catch(() => {});
+    api.funcionarios.list()
+      .then((data) => { if (Array.isArray(data)) setFuncionarios(data); })
+      .catch(() => {});
   }, []);
 
   const handleFileUpload = (event) => {
@@ -45,7 +45,7 @@ function DashboardLayout({ onLogout }) {
     reader.onload = (e) => {
       const conteudo = e.target.result;
 
-      setTimeout(() => {
+      setTimeout(async () => {
         const resultado = parseAFD(conteudo);
         setPontoData(resultado);
         setIsUploading(false);
@@ -93,6 +93,22 @@ function DashboardLayout({ onLogout }) {
           const chaves = new Set(existentes.map(m => `${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
           const novas = matched.filter(m => !chaves.has(`${m.cpf || ''}:${m.pis || ''}:${m.data}:${m.hora}`));
           if (novas.length > 0) salvarLocal('ponto_marcacoes', [...existentes, ...novas]);
+
+          try {
+            await api.marcacoes.import(matched.map(m => ({
+              funcionario_id: m.funcionario_id,
+              nsr: m.nsr,
+              cpf: m.cpf,
+              pis: m.pis,
+              data: m.data,
+              hora: m.hora,
+              equip_id: m.equip_id,
+              equip_nome: m.equip_nome,
+              origem: 'afd',
+            })));
+          } catch (e) {
+            console.warn('Falha ao importar marcações no servidor:', e.message);
+          }
         }
 
         setImportResult({
@@ -186,7 +202,7 @@ function DashboardLayout({ onLogout }) {
             <div className="stats-grid fade-in" style={{ animationDelay: '0.1s' }}>
               <div className="glass-card stat-card">
                 <div className="stat-icon"><Users size={20} /></div>
-                <div className="stat-value">{funcionarios.filter(f => { const e = carregarLocal('ponto_func_extras', {})[f.id]; return e ? e.ativo !== false : true; }).length || '0'}</div>
+                <div className="stat-value">{funcionarios.filter(f => f.ativo !== false).length || '0'}</div>
                 <div className="stat-label">Funcionários Ativos</div>
               </div>
               <div className="glass-card stat-card">
@@ -344,28 +360,37 @@ function DashboardLayout({ onLogout }) {
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(() => Boolean(getToken()));
   const isMobileRoute = window.location.pathname.startsWith('/mobile');
 
   useEffect(() => {
-    // 1. Verifica se já existe uma sessão ativa ao abrir a página
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAuthenticated(!!session);
-      setIsInitializing(false);
-    });
+    let ativo = true;
+    const token = getToken();
 
-    // 2. Escuta mudanças (Login em outra aba, logout)
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      setIsAuthenticated(!!session);
-    });
+    if (!token) {
+      return () => { ativo = false; };
+    }
 
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
+    api.auth.me()
+      .then(() => {
+        if (ativo) setIsAuthenticated(true);
+      })
+      .catch(() => {
+        clearToken();
+        if (ativo) setIsAuthenticated(false);
+      })
+      .finally(() => {
+        if (ativo) setIsInitializing(false);
+      });
+
+    return () => { ativo = false; };
   }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    try { await api.auth.logout(); } catch {
+      // Sessão já expirada/offline: segue com o logout local.
+    }
+    clearToken();
     setIsAuthenticated(false);
   };
 

@@ -77,7 +77,7 @@ O frontend deixa de importar `@supabase/supabase-js`. O backend passa a expor:
 | CRUD (`/api/funcionarios`, `/api/empresas`, `/api/horarios`, `/api/parametros`, ...) | ✅ |
 | Mobile em PostgreSQL (`/api/mobile/*`) | ✅ |
 | Smoke test `npm run test:api` | ✅ (código) |
-| Frontend usando a nova API | ⏳ Fase 4 |
+| Frontend usando a nova API | ✅ Fase 4 |
 | Migração dos dados do Supabase | ⏳ Fase 0 |
 | Deploy/backup no Railway | ⏳ Fase 5 |
 | Teste real contra um Postgres | ⏳ pendente (sem Postgres/Docker nesta máquina) |
@@ -221,7 +221,7 @@ O repositório `sistema-de-pontos` tem um `Dockerfile` e um `railway.json` na **
 
 ### Frontend
 
-O frontend (`ponto-web`) pode ser um segundo serviço no Railway com **Root Directory** `ponto-web` (usa `ponto-web/railway.json`) ou ficar na Vercel. Ele ainda usa Supabase até a Fase 4; depois passará a usar `/api` do backend.
+O frontend (`ponto-web`) pode ser um segundo serviço no Railway com **Root Directory** `ponto-web` (usa `ponto-web/railway.json`) ou ficar na Vercel. Ele já usa `/api` do backend; defina `VITE_PONTOCLOUD_URL` no build se o frontend ficar em outro domínio.
 
 O Railway injeta `PORT`; o servidor já lê `process.env.PORT`.
 
@@ -288,7 +288,7 @@ O Railway injeta `PORT`; o servidor já lê `process.env.PORT`.
 - [ ] Migrar CRUD de funcionários/empresas.
 - [ ] Migrar marcações/mobile.
 - [ ] Migrar horários/parâmetros/correções para o banco.
-- [ ] Criar `src/api.js` e remover o SDK Supabase.
+- [x] Criar `src/api.js` e remover o SDK Supabase.
 - [ ] Testar build, motor e fluxo completo.
 - [ ] Configurar backup e health check.
 - [ ] Desligar o Supabase.
@@ -297,9 +297,8 @@ O Railway injeta `PORT`; o servidor já lê `process.env.PORT`.
 
 ## Próximo passo recomendado
 
-O backend já está implementado (auth + CRUD + mobile em PostgreSQL). Próximos passos:
+O backend e o frontend já usam PostgreSQL/API. Próximos passos:
 
 1. **Fase 1b/3b** — criar Postgres no Railway, rodar `npm run migrate` e validar com `npm run test:api`.
 2. **Fase 0** — exportar dados do Supabase (se o projeto for recuperável).
-3. **Fase 4** — trocar o frontend para `src/api.js` e remover o SDK Supabase.
-4. **Fase 5** — deploy, backup e testes.
+3. **Fase 5** — deploy, backup e testes.

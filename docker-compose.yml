@@ -52,8 +52,6 @@ services:
     build:
       context: ./ponto-web
       args:
-        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?Defina VITE_SUPABASE_URL no arquivo .env}
-        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:?Defina VITE_SUPABASE_ANON_KEY no arquivo .env}
         VITE_PONTOCLOUD_URL: ${VITE_PONTOCLOUD_URL:-}
     container_name: ponto-web
     restart: unless-stopped

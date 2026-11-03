@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Save, X, Edit2, Trash2, Cpu, Wifi, Server, Globe, CheckCircle, XCircle, RefreshCw, Upload, Download, Building2, Users, nextId, carregarLocal, salvarLocal } from './CadastrosUtils';
 import ConfirmModal from '../components/ConfirmModal';
+import { api } from '../api';
 
 async function testCloudConnection(url) {
   try {
@@ -1193,13 +1194,17 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
             const extras = carregarLocal('ponto_func_extras', {});
             for (const f of novosFuncs) {
               try {
-                const supabase = (await import('../supabaseClient')).supabase;
-                const { data: ins } = await supabase.from('funcionarios').insert([{ nome: f.nome, cpf: f.cpf }]);
-                if (ins?.[0]) {
-                  extras[ins[0].id] = { empresa_id: equip.empresa_id, ativo: true };
+                const ins = await api.funcionarios.create({
+                  nome: f.nome,
+                  cpf: f.cpf,
+                  empresa_id: equip.empresa_id,
+                  ativo: true,
+                });
+                if (ins?.id) {
+                  extras[ins.id] = { empresa_id: equip.empresa_id, ativo: true };
                 }
-              } catch {
-                extras[f.id] = { empresa_id: equip.empresa_id, ativo: true };
+              } catch (e) {
+                console.warn('Falha ao importar funcionário:', f.nome, e.message);
               }
             }
             salvarLocal('ponto_func_extras', extras);
@@ -1230,9 +1235,12 @@ export default function EquipamentoSection({ subTab, setSubTab, empresas = [], f
 
     let funcs = funcionarios;
     if (funcs.length === 0) {
-      const { supabase } = await import('../supabaseClient');
-      const { data: dbFuncs } = await supabase.from('funcionarios').select('*').catch(() => ({ data: null }));
-      if (dbFuncs) funcs = dbFuncs;
+      try {
+        const dbFuncs = await api.funcionarios.list();
+        if (Array.isArray(dbFuncs)) funcs = dbFuncs;
+      } catch {
+        // Sem conexão: segue com a lista já carregada em memória.
+      }
     }
 
     try {
