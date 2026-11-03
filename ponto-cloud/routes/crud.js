@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import { query, withTransaction } from '../db.js';
 import { authWeb, hashSenha, somenteDigitos } from '../auth.js';
+import { registrar } from '../auditoria.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -197,6 +198,7 @@ function simpleCrud({
           data.empresa_id = sv;
         }
         const { rows } = await insertRow(table, data);
+        registrar(req, { acao: 'criar', entidade: table, entidadeId: rows[0]?.id, detalhes: data });
         res.status(201).json(rows[0]);
       } catch (e) {
         tratarErro(res, e, `${table}.create`);
@@ -215,6 +217,7 @@ function simpleCrud({
           scopeWhere: scopeWhere ? (params) => scopeWhere(req, params) : undefined,
         });
         if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
+        registrar(req, { acao: 'atualizar', entidade: table, entidadeId: req.params.id, detalhes: data });
         res.json(rows[0]);
       } catch (e) {
         tratarErro(res, e, `${table}.update`);
@@ -231,6 +234,7 @@ function simpleCrud({
           scopeWhere: scopeWhere ? (params) => scopeWhere(req, params) : undefined,
         });
         if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
+        registrar(req, { acao: 'excluir', entidade: table, entidadeId: req.params.id });
         res.json({ ok: true });
       } catch (e) {
         tratarErro(res, e, `${table}.delete`);
@@ -339,6 +343,7 @@ function funcionariosRouter() {
         return inseridos;
       });
 
+      registrar(req, { acao: 'atualizar_hist_horarios', entidade: 'funcionarios', entidadeId: req.params.id, detalhes: { total: rows.length } });
       res.json(rows);
     } catch (e) {
       tratarErro(res, e, 'funcionarios.hist_horarios.replace');
@@ -392,6 +397,7 @@ function funcionariosRouter() {
       if (body.senha) data.senha_hash = await hashSenha(body.senha);
 
       const { rows } = await insertRow('funcionarios', data, 'id');
+      registrar(req, { acao: 'criar', entidade: 'funcionarios', entidadeId: rows[0].id, detalhes: { nome, cpf } });
       const { rows: full } = await query(
         `SELECT ${select} ${joins} WHERE f.id = $1 AND ${EMPRESAS_DO_TENANT('f.empresa_id', 2)}`,
         [rows[0].id, empresa]
@@ -436,6 +442,7 @@ function funcionariosRouter() {
       });
       if (!rows[0]) return res.status(404).json({ error: 'Funcionário não encontrado' });
 
+      registrar(req, { acao: 'atualizar', entidade: 'funcionarios', entidadeId: req.params.id, detalhes: data });
       const { rows: full } = await query(
         `SELECT ${select} ${joins} WHERE f.id = $1 AND ${EMPRESAS_DO_TENANT('f.empresa_id', 2)}`,
         [rows[0].id, empresa]
@@ -457,6 +464,7 @@ function funcionariosRouter() {
         },
       });
       if (!rows[0]) return res.status(404).json({ error: 'Funcionário não encontrado' });
+      registrar(req, { acao: 'excluir', entidade: 'funcionarios', entidadeId: req.params.id });
       res.json({ ok: true });
     } catch (e) {
       tratarErro(res, e, 'funcionarios.delete');
@@ -543,6 +551,7 @@ function marcacoesRouter() {
           b.origem || 'manual',
         ]
       );
+      registrar(req, { acao: 'criar', entidade: 'marcacoes', entidadeId: rows[0]?.id, detalhes: { data: b.data, hora: b.hora, origem: b.origem || 'manual' } });
       res.status(201).json(rows[0] || { ok: true, duplicate: true });
     } catch (e) {
       tratarErro(res, e, 'marcacoes.create');
@@ -584,6 +593,7 @@ function marcacoesRouter() {
         return count;
       });
 
+      registrar(req, { acao: 'importar', entidade: 'marcacoes', detalhes: { importadas, total: lista.length } });
       res.json({ importadas, total: lista.length });
     } catch (e) {
       tratarErro(res, e, 'marcacoes.import');
@@ -652,6 +662,7 @@ function correcoesRouter() {
                    batidas_manuais, justificativa, aplicada_em`,
         [empresa, b.funcionario_id, b.data, batidas, b.justificativa || null]
       );
+      registrar(req, { acao: 'salvar', entidade: 'correcoes', entidadeId: rows[0]?.id, detalhes: { funcionario_id: b.funcionario_id, data: b.data } });
       res.json(rows[0]);
     } catch (e) {
       tratarErro(res, e, 'correcoes.upsert');
@@ -674,6 +685,7 @@ function correcoesRouter() {
         [empresa, funcionario_id, data]
       );
       if (!rows[0]) return res.status(404).json({ error: 'Correção não encontrada' });
+      registrar(req, { acao: 'excluir', entidade: 'correcoes', entidadeId: rows[0].id, detalhes: { funcionario_id, data } });
       res.json({ ok: true });
     } catch (e) {
       tratarErro(res, e, 'correcoes.deleteByKey');
@@ -689,6 +701,7 @@ function correcoesRouter() {
         scopeValue: empresa,
       });
       if (!rows[0]) return res.status(404).json({ error: 'Correção não encontrada' });
+      registrar(req, { acao: 'excluir', entidade: 'correcoes', entidadeId: req.params.id });
       res.json({ ok: true });
     } catch (e) {
       tratarErro(res, e, 'correcoes.delete');
@@ -742,6 +755,7 @@ function diasDescartadosRouter() {
          RETURNING id, funcionario_id, to_char(data, 'YYYY-MM-DD') AS data, motivo`,
         [empresa, b.funcionario_id, b.data, b.motivo || null]
       );
+      registrar(req, { acao: 'salvar', entidade: 'dias_descartados', entidadeId: rows[0]?.id, detalhes: { funcionario_id: b.funcionario_id, data: b.data, motivo: b.motivo } });
       res.json(rows[0]);
     } catch (e) {
       tratarErro(res, e, 'dias_descartados.upsert');
@@ -763,6 +777,7 @@ function diasDescartadosRouter() {
         [empresa, funcionario_id, data]
       );
       if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
+      registrar(req, { acao: 'excluir', entidade: 'dias_descartados', entidadeId: rows[0].id, detalhes: { funcionario_id, data } });
       res.json({ ok: true });
     } catch (e) {
       tratarErro(res, e, 'dias_descartados.deleteByKey');
@@ -778,6 +793,7 @@ function diasDescartadosRouter() {
         scopeValue: empresa,
       });
       if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
+      registrar(req, { acao: 'excluir', entidade: 'dias_descartados', entidadeId: req.params.id });
       res.json({ ok: true });
     } catch (e) {
       tratarErro(res, e, 'dias_descartados.delete');
@@ -832,6 +848,7 @@ function marcacoesDescartadasRouter() {
                    to_char(hora, 'HH24:MI:SS') AS hora`,
         [empresa, b.funcionario_id, b.data, b.hora]
       );
+      registrar(req, { acao: 'criar', entidade: 'marcacoes_descartadas', entidadeId: rows[0]?.id, detalhes: { funcionario_id: b.funcionario_id, data: b.data, hora: b.hora } });
       res.status(201).json(rows[0] || { ok: true, duplicate: true });
     } catch (e) {
       tratarErro(res, e, 'marcacoes_descartadas.create');
@@ -853,6 +870,7 @@ function marcacoesDescartadasRouter() {
         [empresa, funcionario_id, data, hora]
       );
       if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
+      registrar(req, { acao: 'excluir', entidade: 'marcacoes_descartadas', entidadeId: rows[0].id, detalhes: { funcionario_id, data, hora } });
       res.json({ ok: true });
     } catch (e) {
       tratarErro(res, e, 'marcacoes_descartadas.deleteByKey');
@@ -868,6 +886,7 @@ function marcacoesDescartadasRouter() {
         scopeValue: empresa,
       });
       if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
+      registrar(req, { acao: 'excluir', entidade: 'marcacoes_descartadas', entidadeId: req.params.id });
       res.json({ ok: true });
     } catch (e) {
       tratarErro(res, e, 'marcacoes_descartadas.delete');
@@ -924,6 +943,7 @@ function bancoAjustesRouter() {
          RETURNING id, funcionario_id, to_char(data, 'YYYY-MM-DD') AS data, minutos, motivo`,
         [empresa, b.funcionario_id, b.data, minutos, b.motivo || null]
       );
+      registrar(req, { acao: 'criar', entidade: 'banco_horas_ajustes', entidadeId: rows[0]?.id, detalhes: { funcionario_id: b.funcionario_id, data: b.data, minutos } });
       res.status(201).json(rows[0]);
     } catch (e) {
       tratarErro(res, e, 'banco_ajustes.create');
@@ -939,6 +959,7 @@ function bancoAjustesRouter() {
         scopeValue: empresa,
       });
       if (!rows[0]) return res.status(404).json({ error: 'Registro não encontrado' });
+      registrar(req, { acao: 'excluir', entidade: 'banco_horas_ajustes', entidadeId: req.params.id });
       res.json({ ok: true });
     } catch (e) {
       tratarErro(res, e, 'banco_ajustes.delete');
@@ -953,6 +974,15 @@ function bancoAjustesRouter() {
 export function createCadastrosRouter() {
   const router = Router();
   router.use(authWeb);
+
+  // Fase 6: perfil `consulta` só lê. `admin` e `gestor` podem escrever.
+  router.use((req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+    if (req.usuario?.role === 'consulta') {
+      return res.status(403).json({ error: 'Perfil de consulta não pode alterar dados' });
+    }
+    next();
+  });
 
   router.use('/funcionarios', funcionariosRouter());
   router.use('/empresas', simpleCrud({
@@ -1000,6 +1030,7 @@ export function createCadastrosRouter() {
         [req.params.id, empresa]
       );
       if (!rows[0]) return res.status(404).json({ error: 'Empresa não encontrada' });
+      registrar(req, { acao: 'excluir', entidade: 'empresas', entidadeId: req.params.id });
       res.json({ ok: true });
     } catch (e) {
       tratarErro(res, e, 'empresas.delete');

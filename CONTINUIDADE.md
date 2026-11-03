@@ -455,3 +455,40 @@ npm run test:api
 
 O smoke test agora cobre parâmetros, equipamentos, histórico de horários,
 correções e descartes (inclusive remoção por chave natural).
+
+---
+
+## 15. Fase 6 — Segurança, papéis e auditoria (03/11/2026)
+
+### Entregue
+
+- **Papéis aplicados no backend** (`ponto-cloud/routes/crud.js`):
+  - `admin` e `gestor`: leitura + escrita.
+  - `consulta`: apenas leitura (`GET`). Qualquer `POST/PUT/DELETE` retorna 403.
+- **Auditoria** (`ponto-cloud/auditoria.js`): toda mutação do CRUD grava em
+  `auditoria` (quem, quando, entidade, id e detalhes). Cobre funcionários,
+  marcações, correções, descartes, banco, equipamentos, empresas, parâmetros,
+  horários, departamentos, cargos e histórico.
+- **Gestão de usuários** (`ponto-cloud/routes/usuarios.js`), somente `admin`:
+  - `GET /api/usuarios`
+  - `POST /api/usuarios`
+  - `PUT /api/usuarios/:id` (nome, perfil, ativo)
+  - `POST /api/usuarios/:id/reset-password`
+  - `POST /api/usuarios/:id/revoke-sessions`
+  - `DELETE /api/usuarios/:id` (desativa + revoga sessões)
+- **Frontend**:
+  - `UsuariosSection.jsx` (aba **Usuários** visível só para `admin`).
+  - `App` guarda o usuário logado e repassa `role`.
+  - Perfil `consulta` vê banner de somente leitura e não vê a aba Usuários.
+- **Hardening**:
+  - `helmet` (CSP desligada para não quebrar estilos inline).
+  - Rate limit global por IP (2000 req/15 min; health e push isentos).
+  - CORS fail-closed em produção quando `CORS_ORIGINS` não está definido.
+
+### Ainda pendente na Fase 6
+
+- Criptografar credenciais de REP (`equipamentos.senha`) com `REP_SECRET`.
+- Tela de auditoria (consulta dos logs) — pode entrar na Fase 8.
+- Refinar botões de escrita nas telas de Horários/Empresas/Parâmetros/Equipamentos
+  para o perfil `consulta` (o backend já bloqueia).
+- Deprecar `/api/reps` (JSON `data/database.json`).

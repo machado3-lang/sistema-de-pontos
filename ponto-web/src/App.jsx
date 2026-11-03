@@ -20,7 +20,7 @@ import MobileMarcacao from './MobileMarcacao';
 import { api, getToken, clearToken } from './api';
 import { ToastProvider } from './components/Toast';
 
-function DashboardLayout({ onLogout }) {
+function DashboardLayout({ onLogout, usuario }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isUploading, setIsUploading] = useState(false);
   const [pontoData, setPontoData] = useState(null);
@@ -336,7 +336,7 @@ function DashboardLayout({ onLogout }) {
         )}
 
         {activeTab === 'cadastros' && (
-          <CadastrosTab />
+          <CadastrosTab usuario={usuario} />
         )}
 
         {activeTab === 'apuracao' && (
@@ -353,6 +353,7 @@ function DashboardLayout({ onLogout }) {
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [usuario, setUsuario] = useState(null);
   const [isInitializing, setIsInitializing] = useState(() => Boolean(getToken()));
   const isMobileRoute = window.location.pathname.startsWith('/mobile');
 
@@ -365,8 +366,10 @@ function App() {
     }
 
     api.auth.me()
-      .then(() => {
-        if (ativo) setIsAuthenticated(true);
+      .then((data) => {
+        if (!ativo) return;
+        setUsuario(data?.usuario || null);
+        setIsAuthenticated(true);
       })
       .catch(() => {
         clearToken();
@@ -384,6 +387,7 @@ function App() {
       // Sessão já expirada/offline: segue com o logout local.
     }
     clearToken();
+    setUsuario(null);
     setIsAuthenticated(false);
   };
 
@@ -398,10 +402,10 @@ function App() {
   }
 
   if (!isAuthenticated) {
-    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
+    return <LoginScreen onLogin={(u) => { setUsuario(u || null); setIsAuthenticated(true); }} />;
   }
 
-  return <ToastProvider><DashboardLayout onLogout={handleLogout} /></ToastProvider>;
+  return <ToastProvider><DashboardLayout onLogout={handleLogout} usuario={usuario} /></ToastProvider>;
 }
 
 export default App;

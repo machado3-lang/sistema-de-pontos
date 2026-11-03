@@ -104,6 +104,18 @@ export const api = {
   equipamentos: crud('equipamentos'),
   feriados: crud('feriados'),
 
+  usuarios: {
+    list: () => request('/api/usuarios'),
+    create: (data) => request('/api/usuarios', { method: 'POST', body: data }),
+    update: (id, data) => request(`/api/usuarios/${id}`, { method: 'PUT', body: data }),
+    remove: (id) => request(`/api/usuarios/${id}`, { method: 'DELETE' }),
+    resetPassword: (id, senha) => request(`/api/usuarios/${id}/reset-password`, {
+      method: 'POST',
+      body: { senha },
+    }),
+    revokeSessions: (id) => request(`/api/usuarios/${id}/revoke-sessions`, { method: 'POST' }),
+  },
+
   marcacoes: {
     list: (params = {}) => request(`/api/marcacoes${qs(params)}`),
     create: (data) => request('/api/marcacoes', { method: 'POST', body: data }),

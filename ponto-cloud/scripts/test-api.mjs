@@ -69,6 +69,57 @@ try {
   if (!me.usuario?.id) throw new Error('me sem usuário');
   ok('auth/me');
 
+  const emailConsulta = `consulta-${sufixo}@teste.local`;
+  const usuarioConsulta = await req('POST', '/api/usuarios', {
+    token,
+    body: {
+      nome: 'Consulta Teste',
+      email: emailConsulta,
+      senha: 'consulta12345',
+      role: 'consulta',
+    },
+  });
+  ok('criar usuário consulta');
+
+  const usuariosList = await req('GET', '/api/usuarios', { token });
+  if (!usuariosList.some((u) => u.id === usuarioConsulta.id)) {
+    throw new Error('usuário não listado');
+  }
+  ok('listar usuários');
+
+  const loginConsulta = await req('POST', '/api/auth/login', {
+    body: { email: emailConsulta, senha: 'consulta12345' },
+  });
+  ok('login consulta');
+
+  const depListConsulta = await req('GET', '/api/departamentos', { token: loginConsulta.token });
+  if (!Array.isArray(depListConsulta)) throw new Error('consulta não conseguiu ler');
+  ok('consulta: leitura permitida');
+
+  let escritaBloqueada = false;
+  try {
+    await req('POST', '/api/departamentos', {
+      token: loginConsulta.token,
+      body: { nome: `Bloqueado ${sufixo}` },
+    });
+  } catch (e) {
+    escritaBloqueada = e.message.includes('403');
+  }
+  if (!escritaBloqueada) throw new Error('consulta conseguiu escrever');
+  ok('consulta: escrita bloqueada');
+
+  await req('POST', `/api/usuarios/${usuarioConsulta.id}/reset-password`, {
+    token,
+    body: { senha: 'novaSenha12345' },
+  });
+  ok('reset senha');
+
+  await req('POST', `/api/usuarios/${usuarioConsulta.id}/revoke-sessions`, { token });
+  ok('revogar sessões');
+
+  await req('DELETE', `/api/usuarios/${usuarioConsulta.id}`, { token });
+  ok('desativar usuário');
+
   const docEmpresa = String(Date.now()).padStart(14, '0').slice(-14);
   empresaTeste = await req('POST', '/api/empresas', {
     token,

@@ -7,7 +7,8 @@ export default function FuncionarioLista({
   departamentos, cargos, empresas,
   handleEditarFuncionario, setSubTab,
   filtroAtivo, setFiltroAtivo,
-  handleExcluirFuncionario
+  handleExcluirFuncionario,
+  podeEditar = true
 }) {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const handleDeleteClick = (f) => {
@@ -61,13 +62,15 @@ export default function FuncionarioLista({
               </button>
             ))}
           </div>
-          <button
-            className="btn-primary"
-            onClick={() => setSubTab('novo_func')}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-          >
-            <Plus size={18} /> Novo Funcionário
-          </button>
+          {podeEditar && (
+            <button
+              className="btn-primary"
+              onClick={() => setSubTab('novo_func')}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <Plus size={18} /> Novo Funcionário
+            </button>
+          )}
         </div>
       </div>
       <div style={{ marginBottom: '1rem', position: 'relative', maxWidth: '400px' }}>
@@ -149,24 +152,28 @@ export default function FuncionarioLista({
                       )}
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: '0.4rem' }}>
-                        <button
-                          className="btn-primary"
-                          onClick={() => handleEditarFuncionario(f)}
-                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem', background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', boxShadow: 'none' }}
-                          title="Editar"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          className="btn-primary"
-                          onClick={() => handleDeleteClick(f)}
-                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem', background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: 'var(--danger)', boxShadow: 'none' }}
-                          title="Excluir"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+                      {podeEditar ? (
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <button
+                            className="btn-primary"
+                            onClick={() => handleEditarFuncionario(f)}
+                            style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem', background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', boxShadow: 'none' }}
+                            title="Editar"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            className="btn-primary"
+                            onClick={() => handleDeleteClick(f)}
+                            style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem', background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: 'var(--danger)', boxShadow: 'none' }}
+                            title="Excluir"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>—</span>
+                      )}
                     </td>
                   </tr>
                 ))

@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import https from 'https';
 import http from 'http';
 import { randomUUID, randomBytes, timingSafeEqual } from 'crypto';
@@ -12,6 +13,7 @@ import { loginPermitido, limparTentativas } from './rate-limit.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createCadastrosRouter } from './routes/crud.js';
 import { createMobileRouter } from './routes/mobile.js';
+import { createUsuariosRouter } from './routes/usuarios.js';
 import * as pushStore from './push-store.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -67,13 +69,55 @@ const CORS_ORIGINS = (process.env.CORS_ORIGINS || '')
   .map((o) => o.trim())
   .filter(Boolean);
 if (!CORS_ORIGINS.length) {
-  console.warn('[AVISO] CORS_ORIGINS não definido — CORS aberto. Configure as origens permitidas em produção.');
+  console.warn(
+    IS_PRODUCTION
+      ? '[AVISO] CORS_ORIGINS não definido em produção — apenas same-origin será aceito.'
+      : '[AVISO] CORS_ORIGINS não definido — CORS aberto em desenvolvimento.'
+  );
 }
 
 const app = express();
 app.disable('x-powered-by');
-app.use(cors(CORS_ORIGINS.length ? { origin: CORS_ORIGINS } : {}));
+// CSP desligada para não bloquear os estilos inline do frontend.
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors(
+  CORS_ORIGINS.length
+    ? { origin: CORS_ORIGINS }
+    : (IS_PRODUCTION ? { origin: false } : {})
+));
 app.use(express.json({ limit: '50mb' }));
+
+// Rate limit global por IP. Health e push dos REPs ficam de fora.
+const LIMITE_GLOBAL = Number(process.env.RATE_LIMIT_GLOBAL) || 2000;
+const JANELA_GLOBAL_MS = 15 * 60 * 1000;
+const REQUISICOES = new Map();
+
+app.use((req, res, next) => {
+  if (
+    req.path === '/api/health' ||
+    req.path === '/push' || req.path === '/api/push/poll' ||
+    req.path === '/result' || req.path === '/api/push/result' ||
+    req.path === '/event' || req.path === '/api/push/event'
+  ) return next();
+
+  const chave = req.ip || '?';
+  const agora = Date.now();
+  if (REQUISICOES.size > 5000) {
+    for (const [k, v] of REQUISICOES) {
+      if (agora > v.resetAt) REQUISICOES.delete(k);
+    }
+  }
+  const atual = REQUISICOES.get(chave);
+  if (!atual || agora > atual.resetAt) {
+    REQUISICOES.set(chave, { count: 1, resetAt: agora + JANELA_GLOBAL_MS });
+    return next();
+  }
+  atual.count++;
+  if (atual.count > LIMITE_GLOBAL) {
+    return res.status(429).json({ error: 'Muitas requisições. Aguarde alguns minutos.' });
+  }
+  next();
+});
 
 app.use('/api/auth', createAuthRouter());
 
@@ -1214,6 +1258,9 @@ app.get('/api/reps/proxy/info', auth, async (req, res) => {
     res.status(502).json({ error: 'Falha na comunicação com o REP', detalhe: e.toString() });
   }
 });
+
+// Usuários da conta (Fase 6) — somente admin.
+app.use('/api/usuarios', createUsuariosRouter());
 
 // CRUD autenticado (montado depois das rotas específicas de /api/reps e /api/push)
 app.use('/api', createCadastrosRouter());

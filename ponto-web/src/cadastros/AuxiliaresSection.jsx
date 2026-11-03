@@ -11,7 +11,7 @@ import {
 
 export default function AuxiliaresSection({
   subTab, departamentos, setDepartamentos, cargos, setCargos,
-  parametros, setParametros, funcionarios
+  parametros, setParametros, funcionarios, podeEditar = true
 }) {
   const [novoDepTab, setNovoDepTab] = useState('');
   const [editandoDepId, setEditandoDepId] = useState(null);
@@ -94,8 +94,9 @@ export default function AuxiliaresSection({
               onChange={e => setNovoVal(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }}
               style={{ flex: 1 }}
+              disabled={!podeEditar}
             />
-            <button className="btn-primary" onClick={handleAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+            <button className="btn-primary" onClick={handleAdd} disabled={!podeEditar} style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
               <Plus size={16} /> Adicionar
             </button>
           </div>

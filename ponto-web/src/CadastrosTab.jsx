@@ -17,8 +17,10 @@ import FuncionarioLista from './cadastros/FuncionarioLista';
 import AuxiliaresSection from './cadastros/AuxiliaresSection';
 import ParametrosSection from './cadastros/ParametrosSection';
 import EquipamentoSection from './cadastros/EquipamentoSection';
+import UsuariosSection from './cadastros/UsuariosSection';
 
-export default function CadastrosTab() {
+export default function CadastrosTab({ usuario }) {
+  const podeEditar = usuario?.role !== 'consulta';
   const [subTab, setSubTab] = useState('lista_func');
   const [empresas, setEmpresas] = useState(() => lerCache('empresas', []));
   const [horarios, setHorarios] = useState(() => lerCache('horarios', []));
@@ -179,6 +181,9 @@ export default function CadastrosTab() {
         { key: 'cargos', icon: <Users size={16} />, label: 'Cargos' },
         { key: 'parametros', icon: <Sliders size={16} />, label: 'Parâmetros' },
         { key: 'equipamentos', icon: <Cpu size={16} />, label: 'Equipamentos' },
+        ...(usuario?.role === 'admin'
+          ? [{ key: 'usuarios', icon: <Users size={16} />, label: 'Usuários' }]
+          : []),
       ].map(b => (
         <button key={b.key} className="btn-primary" style={{
           background: b.match ? (subTab.includes(b.match) ? 'var(--accent-gradient)' : 'transparent') : (subTab === b.key ? 'var(--accent-gradient)' : 'transparent'),
@@ -194,16 +199,22 @@ export default function CadastrosTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%' }}>
       {renderNav()}
+      {!podeEditar && (
+        <div className="glass-card" style={{ padding: '0.65rem 1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+          Perfil de consulta: você pode visualizar os dados, mas não alterar.
+        </div>
+      )}
       {(subTab === 'lista_func' || subTab === 'novo_func' || subTab === 'editar_func') && (subTab === 'lista_func' ? (
-        <FuncionarioLista funcionarios={funcionarios} loading={loading} searchTerm={searchTerm} setSearchTerm={setSearchTerm} departamentos={departamentos} cargos={cargos} empresas={empresas} handleEditarFuncionario={handleEditarFuncionario} setSubTab={setSubTab} filtroAtivo={filtroAtivo} setFiltroAtivo={setFiltroAtivo} handleExcluirFuncionario={handleExcluirFuncionario} />
+        <FuncionarioLista funcionarios={funcionarios} loading={loading} searchTerm={searchTerm} setSearchTerm={setSearchTerm} departamentos={departamentos} cargos={cargos} empresas={empresas} handleEditarFuncionario={handleEditarFuncionario} setSubTab={setSubTab} filtroAtivo={filtroAtivo} setFiltroAtivo={setFiltroAtivo} handleExcluirFuncionario={handleExcluirFuncionario} podeEditar={podeEditar} />
       ) : (
         <FuncionarioForm form={form} setForm={setForm} empresas={empresas} horarios={horarios} departamentos={departamentos} setDepartamentos={setDepartamentos} cargos={cargos} setCargos={setCargos} parametrosSets={parametrosSets} isEdit={subTab === 'editar_func'} editandoId={editandoId} histHorarios={histHorarios} setHistHorarios={setHistHorarios} handleSalvarFuncionario={handleSalvarFuncionario} handleAtualizarFuncionario={handleAtualizarFuncionario} cpfError={cpfError} setCpfError={setCpfError} onCancel={handleCancel} />
       ))}
       {(subTab === 'empresas' || subTab === 'nova_empresa' || subTab === 'editar_empresa') && <EmpresaSection empresas={empresas} setEmpresas={setEmpresas} subTab={subTab} setSubTab={setSubTab} funcionarios={funcionarios} />}
       {(subTab === 'horarios' || subTab === 'novo_horario' || subTab === 'editar_horario') && <HorarioSection horarios={horarios} setHorarios={setHorarios} subTab={subTab} setSubTab={setSubTab} />}
-      {(subTab === 'departamentos' || subTab === 'cargos') && <AuxiliaresSection subTab={subTab} departamentos={departamentos} setDepartamentos={setDepartamentos} cargos={cargos} setCargos={setCargos} parametros={[]} setParametros={() => {}} funcionarios={funcionarios} />}
+      {(subTab === 'departamentos' || subTab === 'cargos') && <AuxiliaresSection subTab={subTab} departamentos={departamentos} setDepartamentos={setDepartamentos} cargos={cargos} setCargos={setCargos} parametros={[]} setParametros={() => {}} funcionarios={funcionarios} podeEditar={podeEditar} />}
       {subTab === 'parametros' && <ParametrosSection onVoltar={() => setSubTab('lista_func')} />}
       {(subTab === 'equipamentos' || subTab === 'novo_equip' || subTab === 'editar_equip') && <EquipamentoSection subTab={subTab} setSubTab={setSubTab} empresas={empresas} funcionarios={funcionarios} />}
+      {subTab === 'usuarios' && usuario?.role === 'admin' && <UsuariosSection usuarioAtual={usuario} />}
     </div>
   );
 }
