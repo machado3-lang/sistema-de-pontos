@@ -1177,6 +1177,16 @@ app.get('/api/reps/proxy/info', auth, async (req, res) => {
 // CRUD autenticado (montado depois das rotas específicas de /api/reps e /api/push)
 app.use('/api', createCadastrosRouter());
 
+// Frontend buildado (Railway/Docker em serviço único)
+const PUBLIC_DIR = join(__dirname, 'public');
+if (existsSync(PUBLIC_DIR)) {
+  app.use(express.static(PUBLIC_DIR));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(join(PUBLIC_DIR, 'index.html'));
+  });
+}
+
 app.use((err, req, res, next) => {
   console.error('Erro:', err);
   res.status(500).json({ error: 'Erro interno do servidor' });

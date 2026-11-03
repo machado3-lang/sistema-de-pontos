@@ -221,7 +221,9 @@ O repositório `sistema-de-pontos` tem um `Dockerfile` e um `railway.json` na **
 
 ### Frontend
 
-O frontend (`ponto-web`) pode ser um segundo serviço no Railway com **Root Directory** `ponto-web` (usa `ponto-web/railway.json`) ou ficar na Vercel. Ele já usa `/api` do backend; defina `VITE_PONTOCLOUD_URL` no build se o frontend ficar em outro domínio.
+O `Dockerfile` da raiz builda o `ponto-web` e copia o `dist` para `ponto-cloud/public`. O backend serve o frontend na mesma URL, então **não é necessário um segundo serviço** nem CORS para o frontend.
+
+Se preferir separar, use um serviço com **Root Directory** `ponto-web` (usa `ponto-web/railway.json`) e defina `VITE_PONTOCLOUD_URL` no build para a URL do backend.
 
 O Railway injeta `PORT`; o servidor já lê `process.env.PORT`.
 
