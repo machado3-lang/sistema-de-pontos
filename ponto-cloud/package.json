@@ -1,0 +1,19 @@
+{
+  "name": "ponto-cloud",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Serviço de nuvem para sincronização de REPs (Relógios Eletrônicos de Ponto)",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "migrate": "node db/migrate.js",
+    "seed:admin": "node db/seed-admin.js",
+    "test:api": "node scripts/test-api.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "pg": "^8.21.0"
+  }
+}

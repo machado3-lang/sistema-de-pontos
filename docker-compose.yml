@@ -1,0 +1,67 @@
+services:
+  # ── PostgreSQL local (Railway usa o plugin gerenciado) ─────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: ponto-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=ponto
+      - POSTGRES_PASSWORD=ponto
+      - POSTGRES_DB=pontoweb
+    ports:
+      - "5432:5432"
+    volumes:
+      - ponto-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ponto -d pontoweb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend ─────────────────────────────────────────────────────────────────
+  ponto-cloud:
+    build: ./ponto-cloud
+    container_name: ponto-cloud
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ponto-cloud-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PORT=3100
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://ponto:ponto@postgres:5432/pontoweb
+      - PGSSL=false
+      - SESSION_TTL_HOURS=${SESSION_TTL_HOURS:-8}
+      - API_TOKEN=${API_TOKEN:?Defina API_TOKEN no arquivo .env}
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - MOBILE_TOKEN_SECRET=${MOBILE_TOKEN_SECRET:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3100/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Frontend ────────────────────────────────────────────────────────────────
+  ponto-web:
+    build:
+      context: ./ponto-web
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?Defina VITE_SUPABASE_URL no arquivo .env}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:?Defina VITE_SUPABASE_ANON_KEY no arquivo .env}
+        VITE_PONTOCLOUD_URL: ${VITE_PONTOCLOUD_URL:-}
+    container_name: ponto-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - ponto-cloud
+
+volumes:
+  ponto-cloud-data:
+  ponto-postgres-data:
