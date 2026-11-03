@@ -10,7 +10,8 @@
  *   BASE_URL=http://localhost:3100 ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run test:api
  */
 
-const BASE = (process.env.BASE_URL || 'http://localhost:3100').replace(/\/+$/, '');
+const PORT = process.env.PORT || 3100;
+const BASE = (process.env.BASE_URL || `http://127.0.0.1:${PORT}`).replace(/\/+$/, '');
 const EMAIL = process.env.ADMIN_EMAIL;
 const PASSWORD = process.env.ADMIN_PASSWORD;
 
@@ -18,6 +19,8 @@ if (!EMAIL || !PASSWORD) {
   console.error('[test-api] Defina ADMIN_EMAIL e ADMIN_PASSWORD.');
   process.exit(1);
 }
+
+console.log(`[test-api] BASE_URL=${BASE}`);
 
 async function req(method, path, { body, token } = {}) {
   const res = await fetch(`${BASE}${path}`, {
