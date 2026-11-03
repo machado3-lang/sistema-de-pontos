@@ -91,7 +91,17 @@ function auth(req, res, next) {
 app.use('/api/mobile', createMobileRouter());
 
 app.get('/api/health', async (req, res) => {
-  res.json({ status: 'ok', service: 'ponto-cloud', version: '1.0.0', db: await dbHealth() });
+  res.json({
+    status: 'ok',
+    service: 'ponto-cloud',
+    version: '1.0.0',
+    db: await dbHealth(),
+    // Diagnóstico de deploy (injetado pelo Railway; nulo fora dele).
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA || null,
+    branch: process.env.RAILWAY_GIT_BRANCH || null,
+    repo: process.env.RAILWAY_GIT_REPO_NAME || null,
+    deployment: process.env.RAILWAY_DEPLOYMENT_ID || null,
+  });
 });
 
 app.post('/api/admin/login', (req, res) => {
