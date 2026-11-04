@@ -4,6 +4,12 @@ Documento de análise e proposta para a próxima fase (apuração estilo RHiD).
 
 Data: 04/11/2026
 
+> **Atualização (implementado):** o escopo do feriado não é mais uma coluna única.
+> Ele usa `feriado_aplicacoes` com dimensões combináveis (empresa, UF, cidade
+> IBGE, funcionário, departamento, horário): dimensões diferentes são **E**,
+> valores da mesma dimensão são **OU**. O `tipo` ficou como classificação.
+> A cidade é selecionável via IBGE (`funcionarios.cidade_ibge`).
+
 ---
 
 ## 1. Como os sistemas grandes tratam

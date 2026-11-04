@@ -736,12 +736,14 @@ Redesenhar a **Apuração** para o modelo de tabela do RHiD:
   - `funcionarios.cidade` / `uf`;
   - `feriados.uf`, `cidade`, `alvo_empresa_id`;
   - `justificativa_tipos` e `justificativas`.
-- Feriado agora tem **âmbito pelo tipo**:
-  - `nacional` → todos;
-  - `estadual` → UF do funcionário;
-  - `municipal` → cidade/UF do funcionário;
-  - `empresa` → empresa escolhida.
-- O formulário de feriado mostra o campo de vínculo conforme o tipo.
+- Feriado agora tem **aplicações combináveis** (`feriado_aplicacoes`):
+  - empresa, UF, cidade (código IBGE) e funcionário (backend também aceita
+    departamento e horário);
+  - **dimensões diferentes = E**; **valores da mesma dimensão = OU**;
+  - sem aplicações = vale para todos.
+- O `tipo` (nacional/estadual/municipal/empresa) é a **classificação**.
+- Cidade é um **select do IBGE** (código), tanto no funcionário quanto no feriado.
+- O formulário de feriado tem o construtor “Aplicar a” com chips removíveis.
 - **Feriado como dia normal fica no Horário** (`considerar_feriado_dia_normal`),
   não no feriado. Quando ligado, o motor não considera feriado para aquele
   funcionário (não gera extra).
