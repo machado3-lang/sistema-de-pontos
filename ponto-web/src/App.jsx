@@ -20,6 +20,17 @@ import MobileMarcacao from './MobileMarcacao';
 import { api, getToken, clearToken } from './api';
 import { ToastProvider } from './components/Toast';
 
+// Identificador estável do arquivo AFD importado. Evita colisão de NSR entre
+// arquivos diferentes (o NSR reinicia em cada arquivo do REP).
+function identificadorAfd(conteudo) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < conteudo.length; i++) {
+    h ^= conteudo.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return 'afd:' + (h >>> 0).toString(16).padStart(8, '0');
+}
+
 function DashboardLayout({ onLogout, usuario }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isUploading, setIsUploading] = useState(false);
@@ -47,6 +58,7 @@ function DashboardLayout({ onLogout, usuario }) {
       setTimeout(async () => {
         const resultado = parseAFD(conteudo);
         const validacao = validarAFD(conteudo);
+        const afdId = identificadorAfd(conteudo);
         setPontoData(resultado);
         setIsUploading(false);
 
@@ -62,6 +74,7 @@ function DashboardLayout({ onLogout, usuario }) {
         const unmatched = [];
         const unmatchedDocs = new Set();
         const { linhas } = parseAFDLinhas(conteudo);
+        const nomesAfd = resultado.nomes || {};
 
         for (const l of linhas) {
           const doc = l.documento;
@@ -73,8 +86,8 @@ function DashboardLayout({ onLogout, usuario }) {
             data: l.data,
             hora: l.hora,
             importado_em: new Date().toISOString(),
-            equip_id: 'afd',
-            equip_nome: 'AFD Manual',
+            equip_id: afdId,
+            equip_nome: `AFD Manual — ${file.name}`,
             funcionario_id: func?.id || null,
             sem_funcionario: !func,
             nsr: l.nsr,
@@ -86,6 +99,11 @@ function DashboardLayout({ onLogout, usuario }) {
             unmatchedDocs.add(doc);
           }
         }
+
+        const naoEncontrados = [...unmatchedDocs].map((doc) => ({
+          doc,
+          nome: nomesAfd[doc] || '',
+        }));
 
         if (matched.length > 0) {
           try {
@@ -110,12 +128,14 @@ function DashboardLayout({ onLogout, usuario }) {
           importadas: matched.length,
           descartadas: unmatched.length,
           funcNaoCadastrados: unmatchedDocs.size,
+          naoEncontrados,
+          cabecalho: resultado.cabecalho || null,
           validacao,
         });
       }, 500);
     };
     
-    reader.readAsText(file);
+    reader.readAsText(file, 'iso-8859-1');
   };
 
   return (
@@ -254,6 +274,36 @@ function DashboardLayout({ onLogout, usuario }) {
                     {importResult.validacao.avisos.map((aviso, i) => (
                       <div key={`va${i}`} style={{ color: 'var(--warning, #f59e0b)' }}>Aviso: {aviso}</div>
                     ))}
+                  </div>
+                )}
+
+                {importResult.cabecalho?.razaoSocial && (
+                  <div style={{ marginTop: '0.35rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    Empregador no AFD: <strong>{importResult.cabecalho.razaoSocial}</strong>
+                  </div>
+                )}
+
+                {importResult.naoEncontrados?.length > 0 && (
+                  <div style={{ marginTop: '0.75rem', paddingTop: '0.5rem', borderTop: '1px solid var(--glass-border)' }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--danger)' }}>
+                      Documentos sem funcionário cadastrado ({importResult.naoEncontrados.length})
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.4rem' }}>
+                      {importResult.naoEncontrados.map(({ doc, nome }) => (
+                        <span
+                          key={doc}
+                          style={{
+                            fontSize: '0.75rem', padding: '0.25rem 0.5rem', borderRadius: '6px',
+                            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+                          }}
+                        >
+                          {nome ? `${nome} — ` : ''}{doc}
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
+                      Cadastre o CPF/PIS em Cadastros → Funcionários e importe o AFD novamente.
+                    </div>
                   </div>
                 )}
               </div>

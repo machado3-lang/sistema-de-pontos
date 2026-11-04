@@ -903,6 +903,28 @@ A migration semeia cinco tipos para as empresas existentes:
 
 ---
 
+## 26. Importação de AFD — robustez (04/11/2026)
+
+Ajustes no upload do Dashboard (`ponto-web/src/App.jsx`):
+
+- leitura do arquivo como **ISO 8859-1**, conforme a norma do AFD, para não
+  corromper nomes com acento;
+- `equip_id` do AFD passa a ser `afd:<hash do conteúdo>` (FNV-1a). Assim o NSR
+  de arquivos diferentes não colide e reimportar o mesmo arquivo é idempotente;
+- o resultado da importação lista os **documentos sem funcionário cadastrado**,
+  com o nome vindo do registro tipo 5, e orienta o cadastro do CPF/PIS;
+- exibe o empregador do cabeçalho do AFD.
+
+### Fluxo recomendado para o teste com AFD real
+
+1. `npm run migrate` (aplica 009–013).
+2. Cadastros → Funcionários: preencher **CPF** e **PIS** do empregado.
+3. Dashboard → importar o AFD.
+4. Conferir portaria, período, marcações, avisos e documentos não encontrados.
+5. Apuração → conferir a grade e aplicar correções/justificativas.
+
+---
+
 ## 23. Justificativas aplicadas no motor (04/11/2026)
 
 Os lançamentos de justificativa passaram a afetar o cálculo do dia, não são
