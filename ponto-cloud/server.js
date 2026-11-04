@@ -1,8 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import https from 'https';
-import http from 'http';
 import { randomUUID, randomBytes, timingSafeEqual } from 'crypto';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
@@ -17,6 +15,7 @@ import { createUsuariosRouter } from './routes/usuarios.js';
 import { createPeriodosRouter } from './routes/periodos.js';
 import * as pushStore from './push-store.js';
 import { criptografar, precisaCriptografar } from './secret-box.js';
+import { relayRequest, relayConfigurado, provedorAtual } from './rep-relay.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data');
@@ -150,6 +149,9 @@ app.get('/api/health', async (req, res) => {
     deployment: process.env.RAILWAY_DEPLOYMENT_ID || null,
     // true = REP_SECRET configurado; credenciais de REP são cifradas no banco.
     rep_encryption: Boolean(process.env.REP_SECRET),
+    // 'izcloud' quando IZCLOUD_URL está definido; 'direct' caso contrário.
+    rep_provider: provedorAtual(),
+    rep_relay: relayConfigurado(),
   });
 });
 
@@ -318,66 +320,53 @@ app.get('/api/reps/:id/status', auth, (req, res) => {
   });
 });
 
-function proxyREPWithProtocol(protocol, ip, porta, comando, dados) {
-  return new Promise((resolve, reject) => {
-    const data = JSON.stringify(dados || {});
-    const port = porta || 443;
-    const qsIdx = comando.indexOf('?');
-    const path = qsIdx >= 0 ? `/${comando.slice(0, qsIdx)}.fcgi${comando.slice(qsIdx)}` : `/${comando}.fcgi`;
-    const mod = protocol === 'http' ? http : https;
-    const opts = {
-      hostname: ip, port, path, method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
-      timeout: 10000, rejectUnauthorized: false
-    };
-    if (protocol === 'https') opts.insecureHTTPParser = true;
-    const req = mod.request(opts, (res) => {
-      let body = '';
-      res.on('data', (chunk) => body += chunk);
-      res.on('end', () => {
-        try { resolve(JSON.parse(body)); }
-        catch { resolve({ raw: body }); }
-      });
-    });
-    req.on('error', (e) => reject(e.message));
-    req.on('timeout', () => { req.destroy(); reject('Timeout'); });
-    req.write(data);
-    req.end();
+async function proxyREPWithProtocol(protocol, ip, porta, comando, dados) {
+  const data = JSON.stringify(dados || {});
+  const port = Number(porta) || (protocol === 'http' ? 80 : 443);
+  const qsIdx = comando.indexOf('?');
+  const path = qsIdx >= 0 ? `/${comando.slice(0, qsIdx)}.fcgi${comando.slice(qsIdx)}` : `/${comando}.fcgi`;
+
+  const res = await relayRequest({
+    protocol,
+    host: ip,
+    port,
+    path,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: data,
   });
+
+  try { return JSON.parse(res.body); }
+  catch { return { raw: res.body }; }
 }
 
 function proxyREP(ip, porta, comando, dados) {
   return proxyREPWithProtocol('https', ip, porta, comando, dados).catch((err) => {
-    if (err.includes('ECONNRESET') || err.includes('SSL') || err.includes('tls') || err.includes('protocol') || err.includes('Parse Error') || err.includes('socket'))
+    const msg = String(err?.message || err || '');
+    if (msg.includes('ECONNRESET') || msg.includes('SSL') || msg.includes('tls') || msg.includes('protocol') || msg.includes('Parse Error') || msg.includes('socket')) {
       return proxyREPWithProtocol('http', ip, porta, comando, dados);
+    }
     throw err;
   });
 }
 
-function proxyREPBinary(ip, porta, comando, buffer, contentType) {
-  return new Promise((resolve, reject) => {
-    const port = porta || 80;
-    const qsIdx = comando.indexOf('?');
-    const path = qsIdx >= 0 ? `/${comando.slice(0, qsIdx)}.fcgi${comando.slice(qsIdx)}` : `/${comando}.fcgi`;
-    const mod = port == 443 ? https : http;
-    const opts = {
-      hostname: ip, port, path, method: 'POST',
-      headers: { 'Content-Type': contentType || 'application/octet-stream', 'Content-Length': buffer.length },
-      timeout: 15000, rejectUnauthorized: false
-    };
-    const req = mod.request(opts, (res) => {
-      let body = '';
-      res.on('data', (chunk) => body += chunk);
-      res.on('end', () => {
-        try { resolve(JSON.parse(body)); }
-        catch { resolve({ raw: body }); }
-      });
-    });
-    req.on('error', (e) => reject(e.message));
-    req.on('timeout', () => { req.destroy(); reject('Timeout'); });
-    req.write(buffer);
-    req.end();
+async function proxyREPBinary(ip, porta, comando, buffer, contentType) {
+  const port = Number(porta) || 80;
+  const qsIdx = comando.indexOf('?');
+  const path = qsIdx >= 0 ? `/${comando.slice(0, qsIdx)}.fcgi${comando.slice(qsIdx)}` : `/${comando}.fcgi`;
+
+  const res = await relayRequest({
+    protocol: port === 443 ? 'https' : 'http',
+    host: ip,
+    port,
+    path,
+    method: 'POST',
+    headers: { 'Content-Type': contentType || 'application/octet-stream' },
+    body_base64: buffer.toString('base64'),
   });
+
+  try { return JSON.parse(res.body); }
+  catch { return { raw: res.body }; }
 }
 
 app.post('/api/reps/proxy/command', auth, async (req, res) => {

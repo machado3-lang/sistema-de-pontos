@@ -639,3 +639,42 @@ OK: reabrir período
 - Hash/NSR consistente e fechamento fiscal com assinatura.
 - Exportação para folha (Domínio, Alterdata, Fortes, Questor, Sênior) e eSocial.
 - Tela de auditoria (logs) e política de retenção/LGPD.
+
+---
+
+## 18. Integração com o IZCLOUD (04/11/2026)
+
+**Problema:** o backend no Railway não alcança REPs na rede local (`192.168.x.x`).
+O iDClass 1510 só aceita IP direto; o iDFace aceita push, mas a importação de
+funcionários exige o caminho inverso.
+
+**Solução escolhida:** o MultiPonto consome o **IZCLOUD** (nuvem própria em
+desenvolvimento) como relay HTTP para alcançar o REP.
+
+### Entregue no MultiPonto
+
+- `ponto-cloud/rep-relay.js`:
+  - com `IZCLOUD_URL`: envia `POST {IZCLOUD_URL}/relay` com Bearer token;
+  - sem `IZCLOUD_URL`: conecta direto no IP do REP (dev/on-premises).
+- `server.js`: `proxyREPWithProtocol` e `proxyREPBinary` passam pelo relay.
+  Todas as rotas `/api/reps/proxy/*` continuam iguais.
+- `/api/health` expõe:
+  ```json
+  { "rep_provider": "izcloud", "rep_relay": true }
+  ```
+- Contrato completo em **[IZCLOUD_INTEGRACAO.md](IZCLOUD_INTEGRACAO.md)**.
+
+### Variáveis
+
+```
+IZCLOUD_URL=https://izcloud.seudominio.com
+IZCLOUD_TOKEN=...
+REP_TIMEOUT_MS=15000
+```
+
+### Pendente
+
+- O IZCLOUD implementar `POST /relay` conforme o contrato.
+- Testar com iDClass 1510 (login, load_users, get_afd).
+- Testar com iDFace (users/load, face/upload).
+- Enquanto isso, o modo direto continua funcionando para backend local.

@@ -183,6 +183,11 @@ MOBILE_TOKEN_SECRET=
 # Criptografia das credenciais de REP (AES-256-GCM)
 REP_SECRET=
 
+# Conexão com REPs (IZCLOUD relay) — vazio usa conexão direta
+IZCLOUD_URL=
+IZCLOUD_TOKEN=
+REP_TIMEOUT_MS=15000
+
 # App
 PORT=3100
 NODE_ENV=production
@@ -206,6 +211,7 @@ O repositório `sistema-de-pontos` tem um `Dockerfile` e um `railway.json` na **
    - `ADMIN_USER` / `ADMIN_PASSWORD`
    - `MOBILE_TOKEN_SECRET`
    - `REP_SECRET` (criptografia das credenciais de REP)
+   - `IZCLOUD_URL` / `IZCLOUD_TOKEN` (relay para alcançar REPs na rede local)
    - `CORS_ORIGINS` (ex.: a URL do próprio serviço)
    - `SESSION_TTL_HOURS` (opcional, padrão 8)
    - `DATABASE_URL` é injetada automaticamente pelo plugin
