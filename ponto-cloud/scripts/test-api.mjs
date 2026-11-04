@@ -338,6 +338,40 @@ try {
   );
   ok('remover marcação descartada por chave');
 
+  const diaFechamento = `2099-02-${String((Number(sufixo) % 28) + 1).padStart(2, '0')}`;
+  const periodoFechado = await req('POST', '/api/periodos/fechar', {
+    token,
+    body: { data_inicio: diaFechamento, data_fim: diaFechamento },
+  });
+  ok('fechar período');
+
+  const statusPeriodo = await req('GET', `/api/periodos/status?data=${diaFechamento}`, { token });
+  if (!statusPeriodo.fechado) throw new Error('período não consta como fechado');
+  ok('status do período');
+
+  let bloqueioPeriodo = false;
+  try {
+    await req('POST', '/api/correcoes', {
+      token,
+      body: {
+        funcionario_id: funcionario.id,
+        data: diaFechamento,
+        batidas_manuais: ['08:00'],
+        justificativa: 'Teste período fechado',
+      },
+    });
+  } catch (e) {
+    bloqueioPeriodo = e.message.includes('409');
+  }
+  if (!bloqueioPeriodo) throw new Error('correção em período fechado foi aceita');
+  ok('escrita bloqueada em período fechado');
+
+  await req('POST', `/api/periodos/${periodoFechado.id}/reabrir`, {
+    token,
+    body: { motivo: 'Teste automatizado' },
+  });
+  ok('reabrir período');
+
   await req('POST', '/api/banco-horas/ajustes', {
     token,
     body: { funcionario_id: funcionario.id, data: '2026-10-30', minutos: 60, motivo: 'Teste' },

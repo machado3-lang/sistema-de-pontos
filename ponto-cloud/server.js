@@ -14,6 +14,7 @@ import { createAuthRouter } from './routes/auth.js';
 import { createCadastrosRouter } from './routes/crud.js';
 import { createMobileRouter } from './routes/mobile.js';
 import { createUsuariosRouter } from './routes/usuarios.js';
+import { createPeriodosRouter } from './routes/periodos.js';
 import * as pushStore from './push-store.js';
 import { criptografar, precisaCriptografar } from './secret-box.js';
 
@@ -1262,6 +1263,9 @@ app.get('/api/reps/proxy/info', auth, async (req, res) => {
 
 // Usuários da conta (Fase 6) — somente admin.
 app.use('/api/usuarios', createUsuariosRouter());
+
+// Fechamento de período (Fase 7).
+app.use('/api/periodos', createPeriodosRouter());
 
 // CRUD autenticado (montado depois das rotas específicas de /api/reps e /api/push)
 app.use('/api', createCadastrosRouter());

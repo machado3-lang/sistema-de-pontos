@@ -160,4 +160,17 @@ export const api = {
     create: (data) => request('/api/banco-horas/ajustes', { method: 'POST', body: data }),
     remove: (id) => request(`/api/banco-horas/ajustes/${id}`, { method: 'DELETE' }),
   },
+
+  periodos: {
+    list: () => request('/api/periodos'),
+    status: (data) => request(`/api/periodos/status${qs({ data })}`),
+    fechar: (data_inicio, data_fim) => request('/api/periodos/fechar', {
+      method: 'POST',
+      body: { data_inicio, data_fim },
+    }),
+    reabrir: (id, motivo) => request(`/api/periodos/${id}/reabrir`, {
+      method: 'POST',
+      body: { motivo },
+    }),
+  },
 };

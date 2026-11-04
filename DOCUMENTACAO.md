@@ -142,6 +142,17 @@ Histórico de horários: `GET/PUT /api/funcionarios/:id/hist-horarios`.
 
 Toda mutação grava em `auditoria` (usuário, ação, entidade, id, detalhes).
 
+#### Fechamento de período
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/api/periodos` | Lista fechamentos (abertos e reabertos) |
+| GET | `/api/periodos/status?data=YYYY-MM-DD` | Informa se a data está em período fechado |
+| POST | `/api/periodos/fechar` | Fecha `{ data_inicio, data_fim }` (admin/gestor) |
+| POST | `/api/periodos/:id/reabrir` | Reabre com `{ motivo }` (somente admin) |
+
+Período fechado bloqueia `POST/PUT/DELETE` em marcações, correções, dias
+descartados, marcações descartadas e ajustes de banco (HTTP **409**).
+
 #### Mobile
 | Método | Rota | Descrição |
 |--------|------|-----------|

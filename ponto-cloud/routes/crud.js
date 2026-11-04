@@ -8,6 +8,7 @@ import { query, withTransaction } from '../db.js';
 import { authWeb, hashSenha, somenteDigitos } from '../auth.js';
 import { registrar } from '../auditoria.js';
 import { criptografar, descriptografar } from '../secret-box.js';
+import { periodoFechadoParaData, periodoFechadoNoIntervalo } from './periodos.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -92,6 +93,47 @@ function empresaId(req, res) {
     return null;
   }
   return id;
+}
+
+/**
+ * Bloqueia mutações em datas de períodos fechados.
+ * Lê `data` do corpo (POST/PUT) ou da query (DELETE por chave).
+ */
+function bloqueioPeriodo(req, res, next) {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  const data = req.body?.data || req.query?.data;
+  if (!data) return next();
+
+  periodoFechadoParaData(req.usuario?.empresa_id, data)
+    .then((periodo) => {
+      if (periodo) {
+        return res.status(409).json({
+          error: `Período fechado (${periodo.data_inicio} a ${periodo.data_fim}). Reabra o período para alterar.`,
+        });
+      }
+      next();
+    })
+    .catch(next);
+}
+
+async function dataDoRegistro(tabela, id, empresa) {
+  const { rows } = await query(
+    `SELECT to_char(data, 'YYYY-MM-DD') AS data FROM ${tabela}
+      WHERE id = $1 AND empresa_id = $2`,
+    [id, empresa]
+  );
+  return rows[0]?.data || null;
+}
+
+async function bloqueadoPeloPeriodo(res, empresa, data) {
+  const periodo = await periodoFechadoParaData(empresa, data);
+  if (periodo) {
+    res.status(409).json({
+      error: `Período fechado (${periodo.data_inicio} a ${periodo.data_fim}). Reabra o período para alterar.`,
+    });
+    return true;
+  }
+  return false;
 }
 
 function tratarErro(res, e, contexto) {
@@ -481,6 +523,7 @@ function funcionariosRouter() {
 
 function marcacoesRouter() {
   const router = Router();
+  router.use(bloqueioPeriodo);
 
   router.get('/', async (req, res) => {
     try {
@@ -568,6 +611,16 @@ function marcacoesRouter() {
       const lista = Array.isArray(req.body?.marcacoes) ? req.body.marcacoes : [];
       if (!lista.length) return res.status(400).json({ error: 'Lista de marcações vazia' });
 
+      const datas = lista.map((m) => m.data).filter(Boolean).sort();
+      if (datas.length) {
+        const sobreposto = await periodoFechadoNoIntervalo(empresa, datas[0], datas[datas.length - 1]);
+        if (sobreposto) {
+          return res.status(409).json({
+            error: `Período fechado (${sobreposto.data_inicio} a ${sobreposto.data_fim}). Reabra o período para importar.`,
+          });
+        }
+      }
+
       const importadas = await withTransaction(async (client) => {
         let count = 0;
         for (const m of lista.slice(0, 50000)) {
@@ -610,6 +663,7 @@ function marcacoesRouter() {
 
 function correcoesRouter() {
   const router = Router();
+  router.use(bloqueioPeriodo);
 
   router.get('/', async (req, res) => {
     try {
@@ -699,6 +753,8 @@ function correcoesRouter() {
     try {
       const empresa = empresaId(req, res);
       if (!empresa) return;
+      const data = await dataDoRegistro('correcoes', req.params.id, empresa);
+      if (data && await bloqueadoPeloPeriodo(res, empresa, data)) return;
       const { rows } = await deleteRow('correcoes', req.params.id, {
         scopeColumn: 'empresa_id',
         scopeValue: empresa,
@@ -718,6 +774,7 @@ function correcoesRouter() {
 
 function diasDescartadosRouter() {
   const router = Router();
+  router.use(bloqueioPeriodo);
 
   router.get('/', async (req, res) => {
     try {
@@ -791,6 +848,8 @@ function diasDescartadosRouter() {
     try {
       const empresa = empresaId(req, res);
       if (!empresa) return;
+      const data = await dataDoRegistro('dias_descartados', req.params.id, empresa);
+      if (data && await bloqueadoPeloPeriodo(res, empresa, data)) return;
       const { rows } = await deleteRow('dias_descartados', req.params.id, {
         scopeColumn: 'empresa_id',
         scopeValue: empresa,
@@ -810,6 +869,7 @@ function diasDescartadosRouter() {
 
 function marcacoesDescartadasRouter() {
   const router = Router();
+  router.use(bloqueioPeriodo);
 
   router.get('/', async (req, res) => {
     try {
@@ -884,6 +944,8 @@ function marcacoesDescartadasRouter() {
     try {
       const empresa = empresaId(req, res);
       if (!empresa) return;
+      const data = await dataDoRegistro('marcacoes_descartadas', req.params.id, empresa);
+      if (data && await bloqueadoPeloPeriodo(res, empresa, data)) return;
       const { rows } = await deleteRow('marcacoes_descartadas', req.params.id, {
         scopeColumn: 'empresa_id',
         scopeValue: empresa,
@@ -903,6 +965,7 @@ function marcacoesDescartadasRouter() {
 
 function bancoAjustesRouter() {
   const router = Router();
+  router.use(bloqueioPeriodo);
 
   router.get('/', async (req, res) => {
     try {
@@ -957,6 +1020,8 @@ function bancoAjustesRouter() {
     try {
       const empresa = empresaId(req, res);
       if (!empresa) return;
+      const data = await dataDoRegistro('banco_horas_ajustes', req.params.id, empresa);
+      if (data && await bloqueadoPeloPeriodo(res, empresa, data)) return;
       const { rows } = await deleteRow('banco_horas_ajustes', req.params.id, {
         scopeColumn: 'empresa_id',
         scopeValue: empresa,

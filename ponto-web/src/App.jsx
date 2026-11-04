@@ -344,7 +344,7 @@ function DashboardLayout({ onLogout, usuario }) {
         )}
 
         {activeTab === 'relatorios' && (
-          <RelatoriosTab />
+          <RelatoriosTab usuario={usuario} />
         )}
       </main>
     </div>

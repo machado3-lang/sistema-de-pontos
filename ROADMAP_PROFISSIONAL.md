@@ -189,11 +189,13 @@ Data: 03/11/2026
 
 ### Fase 7 — Conformidade fiscal e folha (2–3 semanas) — **P0/P1**
 
-1. Validador de AFD/AFDT/ACJEF/AEJ contra o leiaute oficial.
-2. Hash/NSR consistente e fechamento fiscal por período.
-3. Trava de período fechado + reabertura auditada.
-4. Exportação para folha (Domínio, Alterdata, Fortes, Questor, Sênior) e eSocial.
-5. Testes com arquivos reais de REP.
+**Status (04/11/2026): iniciada — fechamento de período entregue.**
+
+1. ⏳ Validador de AFD/AFDT/ACJEF/AEJ contra o leiaute oficial.
+2. ⏳ Hash/NSR consistente e fechamento fiscal por período.
+3. ✅ Trava de período fechado + reabertura auditada.
+4. ⏳ Exportação para folha (Domínio, Alterdata, Fortes, Questor, Sênior) e eSocial.
+5. ⏳ Testes com arquivos reais de REP.
 
 **Pronto quando:** um contador consegue fechar o mês, gerar os arquivos e importar na folha sem ajuste manual.
 

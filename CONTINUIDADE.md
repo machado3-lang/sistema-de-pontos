@@ -592,3 +592,48 @@ npm run test:engine
   recomenda-se rotacionar.
 - O painel “Upstream Repo” do Railway é cosmético enquanto o auto deploy
   estiver funcionando.
+
+---
+
+## 17. Fase 7 — Fechamento de período (04/11/2026)
+
+### Entregue
+
+- Migration `007_periodos_fechados.sql`:
+  - tabela `periodos_fechados` (empresa, intervalo, quem fechou, resumo,
+    reabertura e motivo);
+  - índice único de períodos abertos por intervalo.
+- Backend `routes/periodos.js`:
+  - `GET /api/periodos`
+  - `GET /api/periodos/status?data=YYYY-MM-DD`
+  - `POST /api/periodos/fechar` (admin/gestor)
+  - `POST /api/periodos/:id/reabrir` (somente admin, motivo obrigatório)
+  - auditoria de fechamento e reabertura.
+- Trava de alterações: `routes/crud.js` bloqueia (HTTP 409) marcações,
+  correções, dias descartados, marcações descartadas e ajustes de banco em
+  datas de períodos fechados. Importação de marcações valida o intervalo.
+- Frontend:
+  - `components/FechamentoPeriodo.jsx` na aba **Relatórios → Fiscais**.
+  - Fechar período, ver resumo, reabrir (admin) e histórico de reaberturas.
+
+### Como validar
+
+```bash
+cd /app
+npm run migrate   # aplica 007_periodos_fechados
+```
+
+O smoke test cobre:
+```
+OK: fechar período
+OK: status do período
+OK: escrita bloqueada em período fechado
+OK: reabrir período
+```
+
+### Próximos passos da Fase 7
+
+- Validador de AFD/AFDT/ACJEF/AEJ contra o leiaute oficial (Portaria 671/1510).
+- Hash/NSR consistente e fechamento fiscal com assinatura.
+- Exportação para folha (Domínio, Alterdata, Fortes, Questor, Sênior) e eSocial.
+- Tela de auditoria (logs) e política de retenção/LGPD.
