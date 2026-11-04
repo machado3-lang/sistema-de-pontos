@@ -1127,7 +1127,7 @@ export function createCadastrosRouter() {
   }));
   router.use('/feriados', simpleCrud({
     table: 'feriados',
-    columns: ['data', 'nome', 'tipo'],
+    columns: ['data', 'nome', 'tipo', 'recorrente'],
     orderBy: 'data ASC',
   }));
   router.use('/equipamentos', simpleCrud({

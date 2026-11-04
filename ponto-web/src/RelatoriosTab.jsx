@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { FileText, Download, Users, Printer, Eye, EyeOff } from 'lucide-react';
+import { FileText, Download, Users, Printer, Eye, EyeOff, Shield } from 'lucide-react';
 import { carregarParametrosMap, formatMinutos, calcMinutos } from './cadastros/parametrosUtils';
 import { calcularPeriodo } from './engine/index.js';
 import { api } from './api';
+import AuditoriaSection from './components/AuditoriaSection';
 import {
   carregarHorarios,
   carregarParametros,
@@ -10,6 +11,9 @@ import {
   carregarCargos,
   carregarMarcacoes,
   carregarApuracaoExtras,
+  carregarFeriados,
+  feriadosParaEngine,
+  lerCache,
 } from './data/pontoData';
 
 function carregarLocal(key, padrao) {
@@ -49,7 +53,7 @@ function downloadTxt(filename, content) {
   URL.revokeObjectURL(url);
 }
 
-function gerarLinhasFunc(doc, func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas) {
+function gerarLinhasFunc(doc, func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriados = []) {
   const horario = horarios.find(h => String(h.id) === String(func.horario_id));
   const params = parametrosMap[String(func.parametro_id)] || parametrosMap['_default'] || {};
   const cpfFunc = String(func.cpf || '').replace(/\D/g, '');
@@ -74,7 +78,7 @@ function gerarLinhasFunc(doc, func, marcacoes, horarios, dataInicio, dataFim, co
     correcoes,
     diasDescartados,
     marcacoesDescartadas,
-    feriados: [],
+    feriados,
   });
 
   const linhas = resultado.linhas
@@ -117,7 +121,7 @@ function gerarLinhasFunc(doc, func, marcacoes, horarios, dataInicio, dataFim, co
   };
 }
 
-export default function RelatoriosTab() {
+export default function RelatoriosTab({ usuario }) {
   const [subTab, setSubTab] = useState('espelho');
   const [searchTerm, setSearchTerm] = useState('');
   const [dataInicio, setDataInicio] = useState(() => { const d = new Date(); d.setDate(1); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); });
@@ -192,12 +196,15 @@ export default function RelatoriosTab() {
   const [parametrosMap, setParametrosMap] = useState(() => carregarParametrosMap());
   const [departamentos, setDepartamentos] = useState(() => carregarLocal('ponto_departamentos', []));
   const [cargos, setCargos] = useState(() => carregarLocal('ponto_cargos', []));
+  const [feriados, setFeriados] = useState(() => lerCache('feriados', []));
+  const feriadosEngine = useMemo(() => feriadosParaEngine(feriados), [feriados]);
 
   useEffect(() => {
     carregarHorarios().then((lista) => { if (Array.isArray(lista)) setHorarios(lista); }).catch(() => {});
     carregarParametros().then(() => setParametrosMap(carregarParametrosMap())).catch(() => {});
     carregarDepartamentos().then((lista) => { if (Array.isArray(lista)) setDepartamentos(lista); }).catch(() => {});
     carregarCargos().then((lista) => { if (Array.isArray(lista)) setCargos(lista); }).catch(() => {});
+    carregarFeriados().then((lista) => { if (Array.isArray(lista)) setFeriados(lista); }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -279,11 +286,11 @@ export default function RelatoriosTab() {
   const dadosFunc = useMemo(() => {
     if (!visaoTodos && selectedFunc) {
       const { doc, func } = selectedFunc;
-      return gerarLinhasFunc(doc, func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas);
+      return gerarLinhasFunc(doc, func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriadosEngine);
     }
     if (visaoTodos) {
       const todos = funcComMarcacoes.map(f => {
-        const dados = gerarLinhasFunc(f.doc, f.func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas);
+        const dados = gerarLinhasFunc(f.doc, f.func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriadosEngine);
         return { ...f, ...dados };
       });
       const agg = todos.reduce((acc, t) => {
@@ -295,7 +302,7 @@ export default function RelatoriosTab() {
       return { todos, ...agg, saldo: agg.totalTrab - agg.totalEsp };
     }
     return null;
-  }, [selectedFunc, visaoTodos, funcComMarcacoes, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas]);
+  }, [selectedFunc, visaoTodos, funcComMarcacoes, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriadosEngine]);
 
   const toggleColuna = (key) => {
     setColunasVisiveis(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -362,7 +369,7 @@ export default function RelatoriosTab() {
     lines.push(r(String(seq).padStart(9, '0'), 9) + '1' + tpIdt + r(idtEmp, 14) + r('', 12) + r((company.razao_social || company.nome || 'EMPRESA').substring(0, 150), 150) + r(toDMA(dataInicio), 8) + r(toDMA(dataFim), 8) + r(toDMA(now.toISOString().slice(0, 10)), 8) + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0'));
     const numRep = '0'.repeat(17);
     funcComMarcacoes.forEach(f => {
-      const dados = gerarLinhasFunc(f.doc, f.func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas);
+      const dados = gerarLinhasFunc(f.doc, f.func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriadosEngine);
       dados.linhas.forEach(l => {
         if (l.descartado) return;
         let parIdx = 0;
@@ -420,7 +427,7 @@ export default function RelatoriosTab() {
       }
     });
     funcComMarcacoes.forEach(f => {
-      const dados = gerarLinhasFunc(f.doc, f.func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas);
+      const dados = gerarLinhasFunc(f.doc, f.func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriadosEngine);
       const pis = String(f.func.pis || '').padStart(12, '0');
       const params = parametrosMap[String(f.func.parametro_id)] || parametrosMap['_default'] || {};
       const horario = horarios.find(h => String(h.id) === String(f.func.horario_id));
@@ -910,6 +917,9 @@ export default function RelatoriosTab() {
         {[
           { key: 'espelho', icon: <FileText size={16} />, label: 'Espelho de Ponto' },
           { key: 'fiscais', icon: <Download size={16} />, label: 'Relatórios Fiscais' },
+          ...(['admin', 'gestor'].includes(usuario?.role)
+            ? [{ key: 'auditoria', icon: <Shield size={16} />, label: 'Auditoria' }]
+            : []),
         ].map(b => (
           <button key={b.key} className="btn-primary" style={{
             background: subTab === b.key ? 'var(--accent-gradient)' : 'transparent',
@@ -921,6 +931,7 @@ export default function RelatoriosTab() {
         ))}
       </div>
 
+      {subTab !== 'auditoria' && (
       <div className="glass-card" style={{ padding: '1rem' }}>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
@@ -988,6 +999,7 @@ export default function RelatoriosTab() {
           </div>
         )}
       </div>
+      )}
 
       <div style={{ display: 'flex', gap: '1rem', flex: 1, overflow: 'hidden' }}>
         {subTab === 'espelho' && !visaoTodos && (
@@ -1014,7 +1026,11 @@ export default function RelatoriosTab() {
           </div>
         )}
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {subTab === 'espelho' ? renderEspelho() : renderFiscais()}
+          {subTab === 'espelho'
+            ? renderEspelho()
+            : subTab === 'fiscais'
+              ? renderFiscais()
+              : <AuditoriaSection />}
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from './api';
-import { isValidCPF, isUUID, Users, Building2, Clock, Briefcase, Cpu, Sliders } from './cadastros/CadastrosUtils';
+import { isValidCPF, isUUID, Users, Building2, Clock, Briefcase, Cpu, Sliders, Calendar } from './cadastros/CadastrosUtils';
 import {
   lerCache,
   carregarHorarios,
@@ -18,6 +18,7 @@ import AuxiliaresSection from './cadastros/AuxiliaresSection';
 import ParametrosSection from './cadastros/ParametrosSection';
 import EquipamentoSection from './cadastros/EquipamentoSection';
 import UsuariosSection from './cadastros/UsuariosSection';
+import FeriadosSection from './cadastros/FeriadosSection';
 
 export default function CadastrosTab({ usuario }) {
   const podeEditar = usuario?.role !== 'consulta';
@@ -180,6 +181,7 @@ export default function CadastrosTab({ usuario }) {
         { key: 'departamentos', icon: <Briefcase size={16} />, label: 'Departamentos' },
         { key: 'cargos', icon: <Users size={16} />, label: 'Cargos' },
         { key: 'parametros', icon: <Sliders size={16} />, label: 'Parâmetros' },
+        { key: 'feriados', icon: <Calendar size={16} />, label: 'Feriados' },
         { key: 'equipamentos', icon: <Cpu size={16} />, label: 'Equipamentos' },
         ...(usuario?.role === 'admin'
           ? [{ key: 'usuarios', icon: <Users size={16} />, label: 'Usuários' }]
@@ -213,6 +215,7 @@ export default function CadastrosTab({ usuario }) {
       {(subTab === 'horarios' || subTab === 'novo_horario' || subTab === 'editar_horario') && <HorarioSection horarios={horarios} setHorarios={setHorarios} subTab={subTab} setSubTab={setSubTab} />}
       {(subTab === 'departamentos' || subTab === 'cargos') && <AuxiliaresSection subTab={subTab} departamentos={departamentos} setDepartamentos={setDepartamentos} cargos={cargos} setCargos={setCargos} parametros={[]} setParametros={() => {}} funcionarios={funcionarios} podeEditar={podeEditar} />}
       {subTab === 'parametros' && <ParametrosSection onVoltar={() => setSubTab('lista_func')} />}
+      {subTab === 'feriados' && <FeriadosSection podeEditar={podeEditar} />}
       {(subTab === 'equipamentos' || subTab === 'novo_equip' || subTab === 'editar_equip') && <EquipamentoSection subTab={subTab} setSubTab={setSubTab} empresas={empresas} funcionarios={funcionarios} />}
       {subTab === 'usuarios' && usuario?.role === 'admin' && <UsuariosSection usuarioAtual={usuario} />}
     </div>

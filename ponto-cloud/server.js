@@ -13,6 +13,7 @@ import { createCadastrosRouter } from './routes/crud.js';
 import { createMobileRouter } from './routes/mobile.js';
 import { createUsuariosRouter } from './routes/usuarios.js';
 import { createPeriodosRouter } from './routes/periodos.js';
+import { createAuditoriaRouter } from './routes/auditoria.js';
 import * as pushStore from './push-store.js';
 import { criptografar, precisaCriptografar } from './secret-box.js';
 import { relayRequest, relayConfigurado, provedorAtual } from './rep-relay.js';
@@ -1257,6 +1258,9 @@ app.use('/api/usuarios', createUsuariosRouter());
 
 // Fechamento de período (Fase 7).
 app.use('/api/periodos', createPeriodosRouter());
+
+// Trilha de auditoria (admin/gestor).
+app.use('/api/auditoria', createAuditoriaRouter());
 
 // CRUD autenticado (montado depois das rotas específicas de /api/reps e /api/push)
 app.use('/api', createCadastrosRouter());

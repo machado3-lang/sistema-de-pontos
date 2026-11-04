@@ -173,4 +173,8 @@ export const api = {
       body: { motivo },
     }),
   },
+
+  auditoria: {
+    list: (params = {}) => request(`/api/auditoria${qs(params)}`),
+  },
 };

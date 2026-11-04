@@ -161,6 +161,19 @@ try {
   }
   ok('listar departamentos');
 
+  // A auditoria é gravada de forma assíncrona; dá um tempo antes de consultar.
+  await new Promise((r) => setTimeout(r, 300));
+  let auditoria = [];
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    auditoria = await req('GET', '/api/auditoria?entidade=departamentos&limit=10', { token });
+    if (Array.isArray(auditoria) && auditoria.some((a) => a.entidade === 'departamentos')) break;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  if (!Array.isArray(auditoria) || !auditoria.some((a) => a.entidade === 'departamentos')) {
+    throw new Error('auditoria não registrou a criação do departamento');
+  }
+  ok('listar auditoria');
+
   cargo = await req('POST', '/api/cargos', {
     token,
     body: { nome: `Teste Cargo ${sufixo}` },
@@ -383,6 +396,18 @@ try {
     body: { data: `2099-12-${String((Number(sufixo) % 28) + 1).padStart(2, '0')}`, nome: `Teste ${sufixo}`, tipo: 'municipal' },
   });
   ok('criar feriado');
+
+  const feriadosList = await req('GET', '/api/feriados', { token });
+  if (!Array.isArray(feriadosList) || !feriadosList.some((f) => f.id === feriado.id)) {
+    throw new Error('feriado não listado');
+  }
+  ok('listar feriados');
+
+  await req('PUT', `/api/feriados/${feriado.id}`, {
+    token,
+    body: { recorrente: true, nome: `Teste ${sufixo} recorrente` },
+  });
+  ok('atualizar feriado');
 
   if (API_TOKEN) {
     await req('POST', '/api/push/event', {

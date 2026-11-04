@@ -678,3 +678,50 @@ REP_TIMEOUT_MS=15000
 - Testar com iDClass 1510 (login, load_users, get_afd).
 - Testar com iDFace (users/load, face/upload).
 - Enquanto isso, o modo direto continua funcionando para backend local.
+
+---
+
+## 19. Feriados, auditoria e ideias do RHiD (04/11/2026)
+
+### Feriados
+
+- Migration `008_feriados_recorrente.sql`: coluna `recorrente`.
+- Frontend `cadastros/FeriadosSection.jsx`:
+  - aba **Feriados** em Cadastros;
+  - nome, data, tipo (nacional/estadual/municipal/empresa) e "repete todo ano";
+  - editar e excluir.
+- Integração com o motor:
+  - `ApuracaoTab` e `RelatoriosTab` carregam os feriados via API;
+  - `feriadosParaEngine()` converte recorrente em `MM-DD` e pontual em `YYYY-MM-DD`;
+  - `calcularPeriodo` já considerava feriados; agora recebe a lista real.
+
+### Auditoria
+
+- Backend `routes/auditoria.js`:
+  - `GET /api/auditoria?limit=&offset=&entidade=&acao=&usuario_id=&data_inicio=&data_fim`
+  - visível para `admin` e `gestor`.
+- Frontend `components/AuditoriaSection.jsx`:
+  - aba **Auditoria** em Relatórios (admin/gestor);
+  - filtros por período, entidade e ação;
+  - detalhes JSON expandíveis;
+  - exportação CSV.
+
+### O que observamos no manual do RHiD
+
+- **Apuração em uma tela**: tabela com todos os funcionários/dias e colunas
+  configuráveis (previsto, trabalhado, normais, noturno, faltas, atrasos,
+  extras, DSR, banco). Edição inline das marcações com justificativa.
+- **Visuais de colunas** salvos por usuário.
+- **Inconsistências** e **justificativas** como cadastros próprios.
+- **Fechamento** e geração de arquivo para folha.
+- **Relatório de auditoria** listando inclusões/alterações/remoções.
+
+### Próximo passo sugerido
+
+Redesenhar a **Apuração** para o modelo de tabela do RHiD:
+
+1. Grade funcionário × dia no período.
+2. Colunas configuráveis (reaproveitar `COLUNAS` de `RelatoriosTab`).
+3. Edição inline da marcação com motivo (já temos `correcoes`).
+4. Destaque de inconsistências e dias fechados.
+5. Botão de espelho/CSV por linha.

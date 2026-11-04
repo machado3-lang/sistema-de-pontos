@@ -9,6 +9,8 @@ import {
   carregarHorarios,
   carregarParametros,
   carregarMarcacoes,
+  carregarFeriados,
+  feriadosParaEngine,
   salvarCorrecao,
   desconsiderarDia as desconsiderarDiaApi,
   restaurarDia as restaurarDiaApi,
@@ -68,6 +70,8 @@ export default function ApuracaoTab({ usuario }) {
   }, []);
   const [horarios, setHorarios] = useState(() => carregarLocal('ponto_horarios', []));
   const [parametrosMap, setParametrosMap] = useState(() => carregarParametrosMap());
+  const [feriados, setFeriados] = useState(() => carregarLocal('ponto_feriados', []));
+  const feriadosEngine = useMemo(() => feriadosParaEngine(feriados), [feriados]);
 
   useEffect(() => {
     carregarHorarios()
@@ -77,6 +81,11 @@ export default function ApuracaoTab({ usuario }) {
       });
     carregarParametros()
       .then(() => setParametrosMap(carregarParametrosMap()))
+      .catch(() => {
+        // Sem conexão: mantém o cache local.
+      });
+    carregarFeriados()
+      .then((lista) => { if (Array.isArray(lista)) setFeriados(lista); })
       .catch(() => {
         // Sem conexão: mantém o cache local.
       });
@@ -141,7 +150,7 @@ export default function ApuracaoTab({ usuario }) {
         correcoes,
         diasDescartados: diasDesconsiderados,
         marcacoesDescartadas,
-        feriados: [],
+        feriados: feriadosEngine,
       });
 
       grouped[doc] = {};
@@ -181,7 +190,7 @@ export default function ApuracaoTab({ usuario }) {
       }
     }
     return grouped;
-  }, [marcacoes, correcoes, diasDesconsiderados, marcacoesDescartadas, funcMap, funcionarios, horarios, parametrosMap, dataInicio, dataFim]);
+  }, [marcacoes, correcoes, diasDesconsiderados, marcacoesDescartadas, funcMap, funcionarios, horarios, parametrosMap, feriadosEngine, dataInicio, dataFim]);
 
   const pendencias = useMemo(() => {
     const list = [];

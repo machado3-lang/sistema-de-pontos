@@ -153,6 +153,14 @@ Toda mutação grava em `auditoria` (usuário, ação, entidade, id, detalhes).
 Período fechado bloqueia `POST/PUT/DELETE` em marcações, correções, dias
 descartados, marcações descartadas e ajustes de banco (HTTP **409**).
 
+#### Auditoria (admin/gestor)
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/api/auditoria` | Lista a trilha (`entidade`, `acao`, `usuario_id`, `data_inicio`, `data_fim`, `limit`, `offset`) |
+
+#### Feriados
+`/api/feriados` com `data`, `nome`, `tipo` e `recorrente` (repete todo ano).
+
 #### Mobile
 | Método | Rota | Descrição |
 |--------|------|-----------|

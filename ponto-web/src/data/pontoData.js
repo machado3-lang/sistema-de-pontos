@@ -20,6 +20,7 @@ export const CACHE_KEY = {
   departamentos: 'ponto_departamentos',
   cargos: 'ponto_cargos',
   equipamentos: 'ponto_equipamentos',
+  feriados: 'ponto_feriados',
   marcacoes: 'ponto_marcacoes',
   correcoes: 'ponto_correcoes',
   diasDescartados: 'ponto_dias_descartados',
@@ -283,6 +284,53 @@ export async function carregarHistHorarios(funcionarioId) {
 
 export function salvarHistHorarios(funcionarioId, historico) {
   return api.funcionarios.histHorarios.replace(funcionarioId, historico || []);
+}
+
+// ── Feriados ────────────────────────────────────────────────────────────────
+
+export async function carregarFeriados() {
+  const rows = await api.feriados.list();
+  const lista = (rows || []).map((r) => ({
+    id: r.id,
+    nome: r.nome || '',
+    data: String(r.data).slice(0, 10),
+    tipo: r.tipo || 'municipal',
+    recorrente: Boolean(r.recorrente),
+  }));
+  gravarCache('feriados', lista);
+  return lista;
+}
+
+export function criarFeriado(dados) {
+  return api.feriados.create({
+    nome: dados.nome,
+    data: dados.data,
+    tipo: dados.tipo || 'municipal',
+    recorrente: Boolean(dados.recorrente),
+  });
+}
+
+export function atualizarFeriado(id, dados) {
+  return api.feriados.update(id, {
+    nome: dados.nome,
+    data: dados.data,
+    tipo: dados.tipo || 'municipal',
+    recorrente: Boolean(dados.recorrente),
+  });
+}
+
+export function excluirFeriado(id) {
+  return api.feriados.remove(id);
+}
+
+/**
+ * Converte o cadastro para o formato do motor:
+ * recorrente vira `MM-DD`; pontual vira `YYYY-MM-DD`.
+ */
+export function feriadosParaEngine(feriados = []) {
+  return (feriados || []).map((f) => (
+    f.recorrente ? String(f.data).slice(5) : String(f.data).slice(0, 10)
+  ));
 }
 
 // ── Equipamentos (REPs) ─────────────────────────────────────────────────────
