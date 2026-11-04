@@ -182,6 +182,15 @@ export const api = {
     remove: (id) => request(`/api/justificativas/${id}`, { method: 'DELETE' }),
   },
 
+  jornadaExcecoes: {
+    list: (params = {}) => request(`/api/jornada-excecoes${qs(params)}`),
+    upsert: (data) => request('/api/jornada-excecoes', { method: 'POST', body: data }),
+    removeByKey: (funcionario_id, data) => request(
+      `/api/jornada-excecoes${qs({ funcionario_id, data })}`,
+      { method: 'DELETE' }
+    ),
+  },
+
   auditoria: {
     list: (params = {}) => request(`/api/auditoria${qs(params)}`),
   },

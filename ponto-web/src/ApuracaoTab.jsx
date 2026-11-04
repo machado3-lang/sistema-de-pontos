@@ -36,6 +36,7 @@ export default function ApuracaoTab({ usuario }) {
   const [marcacoesDescartadas, setMarcacoesDescartadas] = useState(() => carregarLocal('ponto_marcacoes_descartadas', {}));
   const [justificativaTipos, setJustificativaTipos] = useState([]);
   const [justificativas, setJustificativas] = useState([]);
+  const [jornadaExcecoes, setJornadaExcecoes] = useState([]);
   const [tipoJustificativaId, setTipoJustificativaId] = useState('');
   const [textoJustificativa, setTextoJustificativa] = useState('');
 
@@ -48,9 +49,14 @@ export default function ApuracaoTab({ usuario }) {
   useEffect(() => {
     if (!dataInicio || !dataFim) return undefined;
     let ativo = true;
-    api.justificativas.list({ data_inicio: dataInicio, data_fim: dataFim })
-      .then((d) => { if (ativo) setJustificativas(Array.isArray(d) ? d : []); })
-      .catch(() => {});
+    Promise.all([
+      api.justificativas.list({ data_inicio: dataInicio, data_fim: dataFim }).catch(() => []),
+      api.jornadaExcecoes.list({ data_inicio: dataInicio, data_fim: dataFim }).catch(() => []),
+    ]).then(([js, jx]) => {
+      if (!ativo) return;
+      setJustificativas(Array.isArray(js) ? js : []);
+      setJornadaExcecoes(Array.isArray(jx) ? jx : []);
+    });
     return () => { ativo = false; };
   }, [dataInicio, dataFim]);
 
@@ -146,6 +152,13 @@ export default function ApuracaoTab({ usuario }) {
       const func = funcMap[doc] || { nome: `Func. ${doc.slice(0, 4)}...`, cpf: doc };
       const horario = horarios.find(h => String(h.id) === String(func?.horario_id));
       const params = parametrosMap[String(func?.parametro_id)] || parametrosMap['_default'] || {};
+
+      const jornadas = {};
+      for (const ex of jornadaExcecoes) {
+        if (String(ex.funcionario_id) !== String(func?.id)) continue;
+        const h = horarios.find((x) => String(x.id) === String(ex.horario_id));
+        if (h) jornadas[ex.data] = h;
+      }
       const cpfFunc = String(func?.cpf || '').replace(/\D/g, '');
       const pisFunc = String(func?.pis || '').replace(/\D/g, '');
       const minhas = marcacoes.filter(m => {
@@ -169,6 +182,7 @@ export default function ApuracaoTab({ usuario }) {
         diasDescartados: diasDesconsiderados,
         marcacoesDescartadas,
         feriados: feriadosParaFuncionario(feriados, func, horario),
+        jornadas,
       });
 
       grouped[doc] = {};
@@ -208,7 +222,7 @@ export default function ApuracaoTab({ usuario }) {
       }
     }
     return grouped;
-  }, [marcacoes, correcoes, diasDesconsiderados, marcacoesDescartadas, funcMap, funcionarios, horarios, parametrosMap, feriados, dataInicio, dataFim]);
+  }, [marcacoes, correcoes, diasDesconsiderados, marcacoesDescartadas, funcMap, funcionarios, horarios, parametrosMap, feriados, jornadaExcecoes, dataInicio, dataFim]);
 
   const pendencias = useMemo(() => {
     const list = [];
@@ -226,7 +240,7 @@ export default function ApuracaoTab({ usuario }) {
         let problema = 'Dentro do esperado';
         if (info.descartado) {
           tipo = 'danger';
-          status = 'Falta Justificada';
+          status = 'Dia desconsiderado';
           problema = 'Dia desconsiderado: ' + (info.descartado_motivo || 'Sem motivo');
         } else if (!info.valido) {
           tipo = 'danger';
@@ -280,7 +294,33 @@ export default function ApuracaoTab({ usuario }) {
 
   const selectedPendencia = pendencias.find(p => p.id === selectedFunc);
 
+  const jornadaExcecaoDoDia = selectedPendencia
+    ? jornadaExcecoes.find((e) => (
+      String(e.funcionario_id) === String(selectedPendencia.funcionario_id)
+      && e.data === selectedPendencia.data
+    ))
+    : null;
+
   const hasMarkings = marcacoes.length > 0;
+
+  const handleDefinirJornada = async (horarioId) => {
+    if (!selectedPendencia) return;
+    try {
+      if (!horarioId) {
+        await api.jornadaExcecoes.removeByKey(selectedPendencia.funcionario_id, selectedPendencia.data);
+      } else {
+        await api.jornadaExcecoes.upsert({
+          funcionario_id: selectedPendencia.funcionario_id,
+          data: selectedPendencia.data,
+          horario_id: horarioId,
+        });
+      }
+      const jx = await api.jornadaExcecoes.list({ data_inicio: dataInicio, data_fim: dataFim });
+      setJornadaExcecoes(Array.isArray(jx) ? jx : []);
+    } catch (e) {
+      alert('Erro ao definir jornada do dia: ' + e.message);
+    }
+  };
 
   const justificativasDoDia = (funcionarioId, data) => justificativas.filter(
     (j) => String(j.funcionario_id) === String(funcionarioId) && j.data === data
@@ -654,6 +694,26 @@ export default function ApuracaoTab({ usuario }) {
               </div>
             )}
 
+            <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(0,0,0,0.15)', borderRadius: '10px' }}>
+              <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Jornada do dia</h4>
+              <select
+                className="form-input"
+                style={{ width: '100%' }}
+                value={jornadaExcecaoDoDia?.horario_id || ''}
+                onChange={(e) => handleDefinirJornada(e.target.value)}
+              >
+                <option value="">Usar horário padrão do funcionário</option>
+                {horarios.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.nome}{h.tipo === 'Eventual' ? ' (eventual)' : ''}
+                  </option>
+                ))}
+              </select>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                Troca a jornada apenas neste dia (ex.: horário eventual), sem alterar o padrão.
+              </p>
+            </div>
+
             <h4 style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>Ações de Apuração</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -661,7 +721,7 @@ export default function ApuracaoTab({ usuario }) {
                 <input type="time" className="form-input" style={{ width: '100%' }} value={batidaManual} onChange={e => setBatidaManual(e.target.value)} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.85rem' }}>Justificativa Legal</label>
+                <label style={{ fontSize: '0.85rem' }}>Motivo da correção</label>
                 <select className="form-input" style={{ width: '100%' }} value={justificativa} onChange={e => setJustificativa(e.target.value)}>
                   <option value="">Selecione um motivo...</option>
                   <option value="Esquecimento">Esquecimento</option>
@@ -681,7 +741,7 @@ export default function ApuracaoTab({ usuario }) {
                 </button>
               ) : (
                 <button className="btn-primary" style={{ background: 'transparent', border: '1px solid var(--glass-border)', color: 'white', boxShadow: 'none' }} onClick={handleDesconsiderarDia}>
-                  Desconsiderar Dia (Falta)
+                  Desconsiderar dia
                 </button>
               )}
             </div>

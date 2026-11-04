@@ -496,7 +496,7 @@ export default function FuncionarioForm({
                 onChange={e => setForm({ ...form, horario_id: e.target.value })}
               >
                 <option value="">Selecione...</option>
-                {horarios.map(h => (
+                {horarios.filter(h => h.tipo !== 'Eventual').map(h => (
                   <option key={h.id} value={h.id}>{h.nome}</option>
                 ))}
               </select>

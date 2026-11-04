@@ -281,6 +281,26 @@ try {
   }
   ok('histórico de horários');
 
+  const jornadaExcecao = await req('POST', '/api/jornada-excecoes', {
+    token,
+    body: {
+      funcionario_id: funcionario.id,
+      data: '2026-10-30',
+      horario_id: horario.id,
+      motivo: 'Teste eventual',
+    },
+  });
+  ok('criar jornada exceção');
+
+  const jornadasExcecoes = await req('GET', `/api/jornada-excecoes?funcionario_id=${funcionario.id}`, { token });
+  if (!Array.isArray(jornadasExcecoes) || !jornadasExcecoes.some((j) => j.id === jornadaExcecao.id)) {
+    throw new Error('jornada exceção não listada');
+  }
+  ok('listar jornadas exceção');
+
+  await req('DELETE', `/api/jornada-excecoes?funcionario_id=${funcionario.id}&data=2026-10-30`, { token });
+  ok('remover jornada exceção');
+
   await req('POST', '/api/marcacoes', {
     token,
     body: {

@@ -428,6 +428,11 @@ Análise completa de lacunas vs. RHiD, Secullum e EzPoint Web: **[ROADMAP_PROFIS
 - `ponto-cloud/db/migrations/004_empresas_tenant.sql`
 - `ponto-cloud/db/migrations/005_empresas_tenant_backfill.sql`
 - `ponto-cloud/db/migrations/006_push_persistencia.sql`
+- `ponto-cloud/db/migrations/007_periodos_fechados.sql`
+- `ponto-cloud/db/migrations/008_feriados_recorrente.sql`
+- `ponto-cloud/db/migrations/009_feriados_justificativas.sql`
+- `ponto-cloud/db/migrations/010_feriado_aplicacoes.sql`
+- `ponto-cloud/db/migrations/011_jornada_excecoes.sql`
 
 ### Empresas por conta (correção)
 
@@ -765,6 +770,15 @@ Redesenhar a **Apuração** para o modelo de tabela do RHiD:
 - Clique na linha abre o painel de tratamento (batida manual, desconsiderar dia
   e justificativa por tipo).
 - As justificativas lançadas aparecem na coluna e no painel, com remoção.
+
+### Jornada eventual no dia (04/11/2026)
+
+- Horários do tipo `Eventual` não aparecem mais no vínculo do funcionário.
+- Na Apuração, o painel do dia tem **Jornada do dia**: escolhe qualquer horário
+  (inclusive eventual) só para aquela data, via `jornada_excecoes` (migration 011).
+- O motor e os relatórios recebem `jornadas` e aplicam o override no cálculo.
+- **Motivo da correção** (texto) ficou separado da **justificativa tipada**.
+- **Desconsiderar dia** deixa claro que ignora o dia (não é falta).
 
 ### Ainda falta
 

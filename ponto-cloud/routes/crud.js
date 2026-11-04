@@ -1402,6 +1402,105 @@ function justificativasRouter() {
   return router;
 }
 
+// ── Jornada por exceção (horário eventual do dia) ───────────────────────────
+
+function jornadaExcecoesRouter() {
+  const router = Router();
+
+  router.get('/', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const params = [empresa];
+      const where = ['j.empresa_id = $1'];
+
+      if (req.query.funcionario_id) {
+        params.push(req.query.funcionario_id);
+        where.push(`j.funcionario_id = $${params.length}`);
+      }
+      if (req.query.data_inicio) {
+        params.push(req.query.data_inicio);
+        where.push(`j.data >= $${params.length}::date`);
+      }
+      if (req.query.data_fim) {
+        params.push(req.query.data_fim);
+        where.push(`j.data <= $${params.length}::date`);
+      }
+
+      const { rows } = await query(
+        `SELECT j.id, j.funcionario_id, to_char(j.data, 'YYYY-MM-DD') AS data,
+                j.horario_id, j.motivo, h.nome AS horario_nome
+           FROM jornada_excecoes j
+           LEFT JOIN horarios h ON h.id = j.horario_id
+          WHERE ${where.join(' AND ')}
+          ORDER BY j.data DESC`,
+        params
+      );
+      res.json(rows);
+    } catch (e) {
+      tratarErro(res, e, 'jornada_excecoes.list');
+    }
+  });
+
+  router.post('/', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const b = req.body || {};
+      if (!b.funcionario_id || !b.data || !b.horario_id) {
+        return res.status(400).json({ error: 'funcionario_id, data e horario_id são obrigatórios' });
+      }
+      if (await bloqueadoPeloPeriodo(res, empresa, b.data)) return;
+
+      const { rows } = await query(
+        `INSERT INTO jornada_excecoes (empresa_id, funcionario_id, data, horario_id, motivo, criado_por)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (empresa_id, funcionario_id, data)
+         DO UPDATE SET horario_id = EXCLUDED.horario_id,
+                       motivo = EXCLUDED.motivo
+         RETURNING id, funcionario_id, to_char(data, 'YYYY-MM-DD') AS data, horario_id, motivo`,
+        [empresa, b.funcionario_id, b.data, b.horario_id, b.motivo || null, req.usuario.id]
+      );
+
+      registrar(req, {
+        acao: 'salvar',
+        entidade: 'jornada_excecoes',
+        entidadeId: rows[0].id,
+        detalhes: { funcionario_id: b.funcionario_id, data: b.data, horario_id: b.horario_id },
+      });
+      res.json(rows[0]);
+    } catch (e) {
+      tratarErro(res, e, 'jornada_excecoes.upsert');
+    }
+  });
+
+  router.delete('/', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const { funcionario_id, data } = req.query;
+      if (!funcionario_id || !data) {
+        return res.status(400).json({ error: 'funcionario_id e data são obrigatórios' });
+      }
+      if (await bloqueadoPeloPeriodo(res, empresa, data)) return;
+
+      const { rows } = await query(
+        `DELETE FROM jornada_excecoes
+          WHERE empresa_id = $1 AND funcionario_id = $2 AND data = $3
+          RETURNING id`,
+        [empresa, funcionario_id, data]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'Exceção não encontrada' });
+      registrar(req, { acao: 'excluir', entidade: 'jornada_excecoes', entidadeId: rows[0].id });
+      res.json({ ok: true });
+    } catch (e) {
+      tratarErro(res, e, 'jornada_excecoes.delete');
+    }
+  });
+
+  return router;
+}
+
 // ── Router principal ────────────────────────────────────────────────────────
 
 export function createCadastrosRouter() {
@@ -1542,6 +1641,7 @@ export function createCadastrosRouter() {
   router.use('/dias-descartados', diasDescartadosRouter());
   router.use('/banco-horas/ajustes', bancoAjustesRouter());
   router.use('/justificativas', justificativasRouter());
+  router.use('/jornada-excecoes', jornadaExcecoesRouter());
 
   return router;
 }
