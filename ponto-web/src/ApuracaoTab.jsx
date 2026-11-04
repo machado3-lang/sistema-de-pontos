@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Search, AlertCircle, Clock, CheckCircle2, ChevronRight, Edit2, Calendar, Cpu } from 'lucide-react';
 import { carregarParametrosMap } from './cadastros/parametrosUtils';
-import { calcularPeriodo, formatMinutes as formatMinutos } from './engine/index.js';
+import { calcularPeriodo, formatMinutes as formatMinutos, avaliarInconsistencias } from './engine/index.js';
 import { api } from './api';
 import FechamentoPeriodo from './components/FechamentoPeriodo';
 import {
@@ -36,6 +36,7 @@ export default function ApuracaoTab({ usuario }) {
   const [marcacoesDescartadas, setMarcacoesDescartadas] = useState(() => carregarLocal('ponto_marcacoes_descartadas', {}));
   const [justificativaTipos, setJustificativaTipos] = useState([]);
   const [motivosCorrecao, setMotivosCorrecao] = useState([]);
+  const [inconsistenciaTipos, setInconsistenciaTipos] = useState([]);
   const [justificativas, setJustificativas] = useState([]);
   const [jornadaExcecoes, setJornadaExcecoes] = useState([]);
   const [tipoJustificativaId, setTipoJustificativaId] = useState('');
@@ -52,6 +53,9 @@ export default function ApuracaoTab({ usuario }) {
       .catch(() => {});
     api.motivosCorrecao.list()
       .then((d) => setMotivosCorrecao(Array.isArray(d) ? d : []))
+      .catch(() => {});
+    api.inconsistenciaTipos.list()
+      .then((d) => setInconsistenciaTipos(Array.isArray(d) ? d : []))
       .catch(() => {});
   }, []);
 
@@ -217,6 +221,8 @@ export default function ApuracaoTab({ usuario }) {
           carga_esperada: l.previstoMin,
           extraMin: l.extraMin,
           debitoMin: l.debitoMin,
+          faltaMin: l.faltaMin,
+          atrasoMin: l.atrasoMin,
           faltaJustificadaMin: l.faltaJustificadaMin,
           normaisMin: l.normaisMin,
           saldoDiaMin: l.saldoDiaMin,
@@ -252,6 +258,14 @@ export default function ApuracaoTab({ usuario }) {
         if (searchTerm && !nome.toLowerCase().includes(searchTerm.toLowerCase()) && !doc.includes(searchTerm)) continue;
         const cargaEsperada = info.carga_esperada || 0;
         const diff = info.descartado ? 0 : (info.saldoDiaMin ?? (info.total_minutos - cargaEsperada));
+        const incs = avaliarInconsistencias(
+          {
+            ...info,
+            faltaMin: info.faltaMin ?? info.debitoMin,
+            atrasoMin: info.atrasoMin ?? info.debitoMin,
+          },
+          inconsistenciaTipos
+        );
         let tipo = 'success';
         let status = 'Ok';
         let problema = 'Dentro do esperado';
@@ -259,6 +273,13 @@ export default function ApuracaoTab({ usuario }) {
           tipo = 'danger';
           status = 'Dia desconsiderado';
           problema = 'Dia desconsiderado: ' + (info.descartado_motivo || 'Sem motivo');
+        } else if (incs.length > 0) {
+          const principal = incs[0];
+          tipo = principal.prioridade <= 2 ? 'danger' : 'warning';
+          status = principal.nome;
+          problema = principal.valor > 0
+            ? `${principal.nome} (${formatMinutos(principal.valor)})`
+            : principal.nome;
         } else if (!info.valido) {
           tipo = 'danger';
           status = 'Erro: Batida Ímpar';
@@ -281,12 +302,15 @@ export default function ApuracaoTab({ usuario }) {
           total_formatado: info.total_formatado,
           equip: info.equip,
           tipo, status, problema,
+          inconsistencias: incs,
           descartado: info.descartado,
           justificativa: info.justificativa,
           correcao_aplicada: info.correcao_aplicada,
           batidas_manuais: info.batidas_manuais,
           batidas_descartadas: info.batidas_descartadas || [],
           extraMin: info.extraMin, debitoMin: info.debitoMin,
+          atrasoMin: info.atrasoMin ?? info.debitoMin ?? 0,
+          faltaMin: info.faltaMin ?? info.debitoMin ?? 0,
           faltaJustificadaMin: info.faltaJustificadaMin || 0,
           normaisMin: info.normaisMin || 0,
           saldoDiaMin: info.saldoDiaMin || 0,
@@ -308,13 +332,15 @@ export default function ApuracaoTab({ usuario }) {
       if (dataFim && p.data > dataFim) return false;
       return true;
     });
-  }, [processedData, funcMap, funcionarios, searchTerm, dataInicio, dataFim]);
+  }, [processedData, funcMap, funcionarios, searchTerm, dataInicio, dataFim, inconsistenciaTipos]);
 
   const [somenteInconsistencias, setSomenteInconsistencias] = useState(false);
   const linhasGrade = pendencias.filter((p) => {
     if (!somenteInconsistencias) return true;
+    if (p.descartado) return true;
+    if ((p.inconsistencias || []).length > 0) return true;
     const saldo = p.saldoDiaMin ?? (p.total_minutos - p.carga_esperada);
-    return !p.valido || p.descartado || Math.abs(saldo) > 120;
+    return !p.valido || Math.abs(saldo) > 120;
   });
 
   const selectedPendencia = pendencias.find(p => p.id === selectedFunc);
@@ -594,7 +620,17 @@ export default function ApuracaoTab({ usuario }) {
                         <td style={{ color: (p.extraMin || 0) > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>{formatMinutos(p.extraMin || 0)}</td>
                         <td>{formatMinutos(p.dsrMin || 0)}</td>
                         <td>{formatMinutos(p.bancoMin || 0)}</td>
-                        <td><span className={`badge ${p.tipo}`}>{p.status}</span></td>
+                        <td>
+                          <span className={`badge ${p.tipo}`}>{p.status}</span>
+                          {(p.inconsistencias || []).length > 1 && (
+                            <span
+                              title={(p.inconsistencias || []).map(i => i.nome).join(', ')}
+                              style={{ marginLeft: '0.35rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}
+                            >
+                              +{(p.inconsistencias || []).length - 1}
+                            </span>
+                          )}
+                        </td>
                         <td>
                           {(() => {
                             const js = justificativasDoDia(p.funcionario_id, p.data);
@@ -634,6 +670,26 @@ export default function ApuracaoTab({ usuario }) {
               </div>
               <span className={`badge ${selectedPendencia.tipo}`}>{selectedPendencia.problema}</span>
             </div>
+
+            {(selectedPendencia.inconsistencias || []).length > 0 && (
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                {selectedPendencia.inconsistencias.map((inc, i) => (
+                  <span
+                    key={`${inc.id || i}`}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '6px',
+                      fontSize: '0.78rem', padding: '0.3rem 0.55rem', borderRadius: '999px',
+                      background: 'rgba(255,255,255,0.05)',
+                      border: `1px solid ${inc.cor || 'var(--glass-border)'}`,
+                      color: inc.cor || 'var(--text-secondary)',
+                    }}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: inc.cor || '#999', display: 'inline-block' }} />
+                    {inc.nome}{inc.valor > 0 ? ` — ${formatMinutos(inc.valor)}` : ''}
+                  </span>
+                ))}
+              </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--glass-border)', padding: '1rem', borderRadius: '8px' }}>

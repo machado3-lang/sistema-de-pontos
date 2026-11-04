@@ -867,6 +867,42 @@ Referência: `afd_texto.txt` (671) e `afd_1510_texto.txt` (1510).
 
 ---
 
+## 25. Inconsistências configuráveis (04/11/2026)
+
+Nova tabela `inconsistencia_tipos` (migration `013_inconsistencias.sql`):
+
+- `nome`, `campo` (`atraso`, `falta`, `extra`, `banco`, `batida`, `outro`);
+- `valor_min` (limite em minutos);
+- `prioridade` (1 = mais grave);
+- `icone`, `cor`, `ativo`.
+
+A migration semeia cinco tipos para as empresas existentes:
+
+- Batida ímpar (prioridade 1);
+- Débito acima de 2h (prioridade 2);
+- Atraso acima de 10 min (prioridade 3);
+- Hora extra acima de 2h (prioridade 4);
+- Banco negativo acima de 2h (prioridade 5).
+
+### Onde aparece
+
+- **Cadastros → Inconsistências**: CRUD completo.
+- **Apuração**: o motor `engine/inconsistencies.js` avalia cada dia; o status
+  do dia passa a ser a inconsistência de menor prioridade que disparou.
+  O painel lista todas as inconsistências com cor e valor.
+- O filtro **Somente inconsistências** usa os tipos configurados.
+- Sem catálogo (migration não aplicada/empresa sem tipos), a apuração mantém o
+  comportamento antigo como fallback.
+
+### Testes
+
+- `test:engine`: batida ímpar, atraso, extra, limite e prioridade.
+- Smoke test da API: criar, listar, atualizar e excluir tipo de inconsistência.
+
+> A migration 013 precisa ser aplicada com `npm run migrate` no ambiente.
+
+---
+
 ## 23. Justificativas aplicadas no motor (04/11/2026)
 
 Os lançamentos de justificativa passaram a afetar o cálculo do dia, não são

@@ -1603,6 +1603,11 @@ export function createCadastrosRouter() {
     columns: ['descricao', 'ativo'],
     orderBy: 'descricao ASC',
   }));
+  router.use('/inconsistencia-tipos', simpleCrud({
+    table: 'inconsistencia_tipos',
+    columns: ['nome', 'campo', 'valor_min', 'prioridade', 'icone', 'cor', 'ativo'],
+    orderBy: 'prioridade ASC, nome ASC',
+  }));
   router.use('/equipamentos', simpleCrud({
     table: 'equipamentos',
     columns: [

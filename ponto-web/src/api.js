@@ -176,6 +176,7 @@ export const api = {
 
   justificativaTipos: crud('justificativa-tipos'),
   motivosCorrecao: crud('motivos-correcao'),
+  inconsistenciaTipos: crud('inconsistencia-tipos'),
   justificativas: {
     list: (params = {}) => request(`/api/justificativas${qs(params)}`),
     create: (data) => request('/api/justificativas', { method: 'POST', body: data }),

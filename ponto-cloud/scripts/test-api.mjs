@@ -394,6 +394,40 @@ try {
   await req('DELETE', `/api/motivos-correcao/${motivoCorrecao.id}`, { token });
   ok('excluir motivo de correção');
 
+  const incTipo = await req('POST', '/api/inconsistencia-tipos', {
+    token,
+    body: {
+      nome: `Inconsistência ${sufixo}`,
+      campo: 'extra',
+      valor_min: 90,
+      prioridade: 2,
+      icone: 'trending-up',
+      cor: '#f59e0b',
+      ativo: true,
+    },
+  });
+  ok('criar tipo de inconsistência');
+
+  const incList = await req('GET', '/api/inconsistencia-tipos', { token });
+  if (!Array.isArray(incList) || !incList.some((i) => (
+    i.id === incTipo.id && i.campo === 'extra' && Number(i.valor_min) === 90
+  ))) {
+    throw new Error('tipo de inconsistência não listado');
+  }
+  ok('listar tipos de inconsistência');
+
+  const incAtualizada = await req('PUT', `/api/inconsistencia-tipos/${incTipo.id}`, {
+    token,
+    body: { valor_min: 120, prioridade: 4 },
+  });
+  if (Number(incAtualizada.valor_min) !== 120 || Number(incAtualizada.prioridade) !== 4) {
+    throw new Error('tipo de inconsistência não atualizado');
+  }
+  ok('atualizar tipo de inconsistência');
+
+  await req('DELETE', `/api/inconsistencia-tipos/${incTipo.id}`, { token });
+  ok('excluir tipo de inconsistência');
+
   const diaFechamento = `2099-02-${String((Number(sufixo) % 28) + 1).padStart(2, '0')}`;
   const periodoFechado = await req('POST', '/api/periodos/fechar', {
     token,

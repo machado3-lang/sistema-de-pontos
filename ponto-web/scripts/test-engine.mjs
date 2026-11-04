@@ -127,6 +127,19 @@ const dsrComProtecao = E.calcularDSR({
 check('dsr desconta falta sem protecao', dsrSemProtecao.detalhes[0].diasComFalta === 1, dsrSemProtecao.detalhes[0].diasComFalta);
 check('dsr protegido ignora falta', dsrComProtecao.detalhes[0].diasComFalta === 0, dsrComProtecao.detalhes[0].diasComFalta);
 
+const incTipos = [
+  { id: 'i1', nome: 'Batida ímpar', campo: 'batida', prioridade: 1, ativo: true },
+  { id: 'i2', nome: 'Atraso 10', campo: 'atraso', valor_min: 10, prioridade: 3, ativo: true },
+  { id: 'i3', nome: 'Extra 120', campo: 'extra', valor_min: 120, prioridade: 4, ativo: true },
+];
+const incDia = E.avaliarInconsistencias({ valido: false, atrasoMin: 15, extraMin: 0 }, incTipos);
+check('inconsistencia batida impar', incDia.some((i) => i.campo === 'batida'), incDia);
+check('inconsistencia atraso', incDia.some((i) => i.campo === 'atraso' && i.valor === 15), incDia);
+check('inconsistencia extra nao dispara', !incDia.some((i) => i.campo === 'extra'), incDia);
+check('inconsistencia prioridade', incDia[0]?.campo === 'batida', incDia);
+const incExtra = E.avaliarInconsistencias({ valido: true, atrasoMin: 0, extraMin: 130 }, incTipos);
+check('inconsistencia extra dispara', incExtra.some((i) => i.campo === 'extra' && i.valor === 130), incExtra);
+
 const diaTiers = E.calcularDia({
   data: '2026-10-30', funcionario: {}, horario, params,
   marcacoes: [{ hora: '08:00' }, { hora: '12:00' }, { hora: '13:00' }, { hora: '21:00' }],

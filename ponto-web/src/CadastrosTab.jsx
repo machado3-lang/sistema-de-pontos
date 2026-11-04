@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ClipboardList, MessageSquare } from 'lucide-react';
+import { ClipboardList, MessageSquare, AlertTriangle } from 'lucide-react';
 import { api } from './api';
 import { isValidCPF, isUUID, Users, Building2, Clock, Briefcase, Cpu, Sliders, Calendar } from './cadastros/CadastrosUtils';
 import {
@@ -22,6 +22,7 @@ import UsuariosSection from './cadastros/UsuariosSection';
 import FeriadosSection from './cadastros/FeriadosSection';
 import JustificativaTiposSection from './cadastros/JustificativaTiposSection';
 import MotivosCorrecaoSection from './cadastros/MotivosCorrecaoSection';
+import InconsistenciasSection from './cadastros/InconsistenciasSection';
 
 export default function CadastrosTab({ usuario }) {
   const podeEditar = usuario?.role !== 'consulta';
@@ -191,6 +192,7 @@ export default function CadastrosTab({ usuario }) {
         { key: 'feriados', icon: <Calendar size={16} />, label: 'Feriados' },
         { key: 'justificativas', icon: <ClipboardList size={16} />, label: 'Justificativas' },
         { key: 'motivos', icon: <MessageSquare size={16} />, label: 'Motivos' },
+        { key: 'inconsistencias', icon: <AlertTriangle size={16} />, label: 'Inconsistências' },
         { key: 'equipamentos', icon: <Cpu size={16} />, label: 'Equipamentos' },
         ...(usuario?.role === 'admin'
           ? [{ key: 'usuarios', icon: <Users size={16} />, label: 'Usuários' }]
@@ -227,6 +229,7 @@ export default function CadastrosTab({ usuario }) {
       {subTab === 'feriados' && <FeriadosSection podeEditar={podeEditar} />}
       {subTab === 'justificativas' && <JustificativaTiposSection podeEditar={podeEditar} />}
       {subTab === 'motivos' && <MotivosCorrecaoSection podeEditar={podeEditar} />}
+      {subTab === 'inconsistencias' && <InconsistenciasSection podeEditar={podeEditar} />}
       {(subTab === 'equipamentos' || subTab === 'novo_equip' || subTab === 'editar_equip') && <EquipamentoSection subTab={subTab} setSubTab={setSubTab} empresas={empresas} funcionarios={funcionarios} />}
       {subTab === 'usuarios' && usuario?.role === 'admin' && <UsuariosSection usuarioAtual={usuario} />}
     </div>
