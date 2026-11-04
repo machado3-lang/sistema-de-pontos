@@ -1181,23 +1181,41 @@ function feriadosRouter() {
       const empresa = empresaId(req, res);
       if (!empresa) return;
       const b = req.body || {};
-      if (!b.nome || !b.data) {
-        return res.status(400).json({ error: 'Nome e data são obrigatórios' });
+
+      const temNome = b.nome !== undefined;
+      const temData = b.data !== undefined;
+      if ((temNome && !String(b.nome).trim()) || (temData && !b.data)) {
+        return res.status(400).json({ error: 'Nome e data não podem ser vazios' });
       }
-      const tipo = TIPOS_FERIADO.includes(b.tipo) ? b.tipo : 'municipal';
-      const aplicacoes = normalizarAplicacoes(b.aplicacoes);
+
+      const tipo = b.tipo !== undefined
+        ? (TIPOS_FERIADO.includes(b.tipo) ? b.tipo : null)
+        : null;
+      const recorrente = b.recorrente !== undefined ? Boolean(b.recorrente) : null;
+      const aplicacoes = Array.isArray(b.aplicacoes) ? normalizarAplicacoes(b.aplicacoes) : null;
 
       const row = await withTransaction(async (client) => {
         const r = await client.query(
           `UPDATE feriados
-              SET nome = $1, data = $2, tipo = $3, recorrente = $4
+              SET nome = COALESCE($1, nome),
+                  data = COALESCE($2::date, data),
+                  tipo = COALESCE($3, tipo),
+                  recorrente = COALESCE($4, recorrente)
             WHERE id = $5 AND empresa_id = $6
             RETURNING id, nome, to_char(data, 'YYYY-MM-DD') AS data, tipo, recorrente`,
-          [b.nome, b.data, tipo, Boolean(b.recorrente), req.params.id, empresa]
+          [temNome ? b.nome : null, temData ? b.data : null, tipo, recorrente, req.params.id, empresa]
         );
         if (!r.rows[0]) return null;
-        await substituirAplicacoes(client, req.params.id, aplicacoes);
-        return { ...r.rows[0], aplicacoes };
+
+        if (aplicacoes !== null) {
+          await substituirAplicacoes(client, req.params.id, aplicacoes);
+        }
+
+        const { rows: apps } = await client.query(
+          'SELECT tipo, valor, rotulo FROM feriado_aplicacoes WHERE feriado_id = $1',
+          [req.params.id]
+        );
+        return { ...r.rows[0], aplicacoes: apps };
       });
 
       if (!row) return res.status(404).json({ error: 'Feriado não encontrado' });

@@ -425,6 +425,17 @@ try {
   });
   ok('atualizar feriado');
 
+  const feriadosAtualizados = await req('GET', '/api/feriados', { token });
+  const feriadoAtualizado = feriadosAtualizados.find((f) => f.id === feriado.id);
+  if (
+    !feriadoAtualizado
+    || !Array.isArray(feriadoAtualizado.aplicacoes)
+    || feriadoAtualizado.aplicacoes.length !== 2
+  ) {
+    throw new Error('aplicações do feriado não foram salvas');
+  }
+  ok('listar feriados com aplicações');
+
   const justTipo = await req('POST', '/api/justificativa-tipos', {
     token,
     body: {
