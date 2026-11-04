@@ -10,6 +10,7 @@ export * from './tolerance.js';
 export * from './night.js';
 export * from './overtime.js';
 export * from './absence.js';
+export * from './justification.js';
 export * from './dsr.js';
 export * from './bank.js';
 export * from './calculator.js';

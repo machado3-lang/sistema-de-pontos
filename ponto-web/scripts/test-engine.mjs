@@ -53,6 +53,80 @@ const diaFalta = E.calcularDia({
 });
 check('falta dia inteiro 480', diaFalta.faltaMin === 480, diaFalta.faltaMin);
 
+const diaJustificado = E.calcularDia({
+  data: '2026-10-30', funcionario: { id: 'f1' }, horario, params, marcacoes: [],
+  justificativas: [{
+    id: 1, funcionario_id: 'f1', data: '2026-10-30',
+    tipo_comportamento: 'dia_inteiro', abona_falta: true,
+  }],
+});
+check('justificativa dia inteiro abona falta', diaJustificado.faltaMin === 0, diaJustificado.faltaMin);
+check('justificativa dia inteiro abono 480', diaJustificado.abonoMin === 480, diaJustificado.abonoMin);
+check('justificativa dia inteiro total JUSTIFICADA', diaJustificado.total_formatado === 'JUSTIFICADA', diaJustificado.total_formatado);
+
+const diaPeriodoJust = E.calcularDia({
+  data: '2026-10-30', funcionario: { id: 'f1' }, horario, params,
+  marcacoes: [{ hora: '08:00' }, { hora: '12:00' }, { hora: '13:00' }, { hora: '16:00' }],
+  justificativas: [{
+    id: 2, funcionario_id: 'f1', data: '2026-10-30',
+    tipo_comportamento: 'periodo', inicio: '08:00', fim: '09:00',
+  }],
+});
+check('justificativa periodo abona 60', diaPeriodoJust.abonoMin === 60, diaPeriodoJust.abonoMin);
+check('justificativa periodo zera falta', diaPeriodoJust.faltaMin === 0, diaPeriodoJust.faltaMin);
+
+const diaHorasJust = E.calcularDia({
+  data: '2026-10-30', funcionario: { id: 'f1' }, horario, params,
+  marcacoes: [{ hora: '08:00' }, { hora: '12:00' }, { hora: '13:00' }, { hora: '16:00' }],
+  justificativas: [{
+    id: 3, funcionario_id: 'f1', data: '2026-10-30',
+    tipo_comportamento: 'horas', abona_horas: true, minutos: 30,
+  }],
+});
+check('justificativa horas abona 30', diaHorasJust.abonoMin === 30, diaHorasJust.abonoMin);
+check('justificativa horas falta 30', diaHorasJust.faltaMin === 30, diaHorasJust.faltaMin);
+
+const diaAjuste = E.calcularDia({
+  data: '2026-10-30', funcionario: { id: 'f1' }, horario, params,
+  marcacoes: [{ hora: '08:00' }, { hora: '12:00' }, { hora: '13:00' }, { hora: '16:00' }],
+  justificativas: [{
+    id: 4, funcionario_id: 'f1', data: '2026-10-30',
+    tipo_comportamento: 'ajuste', minutos: -30,
+  }],
+});
+check('justificativa ajuste -30', diaAjuste.ajusteMin === -30, diaAjuste.ajusteMin);
+check('justificativa ajuste saldo -90', diaAjuste.saldoDiaMin === -90, diaAjuste.saldoDiaMin);
+
+const diaBancoJust = E.calcularDia({
+  data: '2026-10-30', funcionario: { id: 'f1' }, horario, params,
+  marcacoes: [{ hora: '08:00' }, { hora: '12:00' }, { hora: '13:00' }, { hora: '19:00' }],
+  justificativas: [{
+    id: 5, funcionario_id: 'f1', data: '2026-10-30',
+    tipo_comportamento: 'banco', gera_banco: true,
+  }],
+});
+check('justificativa banco reloca extra', diaBancoJust.extraMin === 0, diaBancoJust.extraMin);
+check('justificativa banco credita 120', diaBancoJust.bancoAjusteMin === 120, diaBancoJust.bancoAjusteMin);
+
+const linhasDSRBase = [
+  { data: '2026-10-26', tipoDia: 'dias_uteis', extraMin: 0, faltaMin: 0 },
+  { data: '2026-10-27', tipoDia: 'dias_uteis', extraMin: 0, faltaMin: 0 },
+  { data: '2026-10-28', tipoDia: 'dias_uteis', extraMin: 0, faltaMin: 0 },
+  { data: '2026-10-29', tipoDia: 'dias_uteis', extraMin: 0, faltaMin: 0 },
+  { data: '2026-10-30', tipoDia: 'dias_uteis', extraMin: 0, faltaMin: 480, protegeDSR: true },
+  { data: '2026-11-01', tipoDia: 'domingos_feriados', extraMin: 120, faltaMin: 0 },
+];
+const dsrSemProtecao = E.calcularDSR({
+  linhas: linhasDSRBase.map((l) => ({ ...l, protegeDSR: false })),
+  params: { dsr: { descontar_faltas: true, faltas_para_perder_dsr: 1 } },
+});
+const dsrComProtecao = E.calcularDSR({
+  linhas: linhasDSRBase,
+  params: { dsr: { descontar_faltas: true, faltas_para_perder_dsr: 1 } },
+});
+check('dsr desconta falta sem protecao', dsrSemProtecao.detalhes[0].diasComFalta === 1, dsrSemProtecao.detalhes[0].diasComFalta);
+check('dsr protegido ignora falta', dsrComProtecao.detalhes[0].diasComFalta === 0, dsrComProtecao.detalhes[0].diasComFalta);
+
 const diaTiers = E.calcularDia({
   data: '2026-10-30', funcionario: {}, horario, params,
   marcacoes: [{ hora: '08:00' }, { hora: '12:00' }, { hora: '13:00' }, { hora: '21:00' }],

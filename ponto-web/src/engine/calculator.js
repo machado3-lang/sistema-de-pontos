@@ -13,6 +13,7 @@ import { aplicarTolerancia } from './tolerance.js';
 import { calcularNoturno } from './night.js';
 import { calcularExtras } from './overtime.js';
 import { calcularFaltas } from './absence.js';
+import { aplicarJustificativas } from './justification.js';
 import { calcularDSR } from './dsr.js';
 import { calcularBanco } from './bank.js';
 
@@ -45,6 +46,7 @@ export function calcularDia({
   feriados = [],
   jornadaOverride = null,
   preAssinaladas = [],
+  justificativas = [],
 } = {}) {
   const params = normalizarParams(paramsRaw);
   const jornada = resolverJornadaDoDia({
@@ -136,16 +138,36 @@ export function calcularDia({
     faltas.atrasoMin = 0;
   }
 
+  const just = aplicarJustificativas({
+    justificativas,
+    faltaMin: faltas.faltaMin,
+    extraMin: extras.extraMin,
+    previstoMin,
+  });
+
+  const faltaFinalMin = descartado ? 0 : just.faltaMin;
+  const faltaJustificadaFinalMin = descartado
+    ? faltas.faltaJustificadaMin
+    : faltas.faltaJustificadaMin + just.abonoFaltaMin;
+  const extraFinalMin = just.extraMin;
+  const extraRelocado = extraFinalMin < extras.extraMin;
+  const atrasoFinalMin = descartado
+    ? 0
+    : Math.max(0, faltas.atrasoMin - just.abonoFaltaMin);
+  const saldoDiaMin = descartado
+    ? 0
+    : (tol.trabalhadoMin - previstoMin) + just.abonoFaltaMin + just.ajusteMin;
+
   const normaisMin = params.faltas_atrasos.nao_descontar_faltas_de_normais
     ? tol.trabalhadoMin
-    : Math.min(tol.trabalhadoMin, previstoMin);
+    : Math.min(tol.trabalhadoMin + just.abonoFaltaMin, previstoMin);
 
   const intervalo = calcularIntervalo({ pares: tol.pares, jornada, params });
 
   const ocorrencias = [];
   if (!valido) ocorrencias.push({ tipo: 'batida_impar', mensagem: 'Número ímpar de batidas no dia' });
   if (!jornada.trabalha && temBatidas) ocorrencias.push({ tipo: 'trabalho_em_folga', mensagem: 'Trabalho em dia não previsto' });
-  if (jornada.trabalha && !temBatidas && !descartado && !justificativa) {
+  if (jornada.trabalha && !temBatidas && !descartado && !justificativa && faltaFinalMin > 0) {
     ocorrencias.push({ tipo: 'falta', mensagem: 'Sem marcações em dia previsto' });
   }
   if (intervalo.faltanteMin > 0) {
@@ -160,15 +182,20 @@ export function calcularDia({
     { passo: 'batidas', detalhe: `${batidas.length} batida(s), ${pares.filter((p) => p.completo).length} par(es), trabalhado ${formatMinutes(tol.trabalhadoMin)}` },
     { passo: 'tolerancia', detalhe: `${params.clt_art58.metodo}: ${formatMinutes(tol.toleranciaMin)} tolerados` },
     { passo: 'extras', detalhe: `${formatMinutes(extras.extraMin)} (${extras.percentualMedio}%)` },
-    { passo: 'faltas', detalhe: `${formatMinutes(faltas.faltaMin)} não justificadas, ${formatMinutes(faltas.faltaJustificadaMin)} justificadas` },
+    { passo: 'faltas', detalhe: `${formatMinutes(faltaFinalMin)} não justificadas, ${formatMinutes(faltaJustificadaFinalMin)} justificadas` },
+    { passo: 'justificativas', detalhe: just.temJustificativa
+      ? `${just.itens.length} lançamento(s), ${formatMinutes(just.abonoFaltaMin)} abonados, ${formatMinutes(just.ajusteMin)} de ajuste`
+      : 'nenhuma' },
     { passo: 'noturno', detalhe: `${formatMinutes(noturno.reduzidoMin)} reduzidas (${formatMinutes(noturno.relogioMin)} relógio)` },
   ];
 
   const totalFormatado = descartado
     ? 'FALTA'
-    : (!temBatidas && previstoMin > 0 && jornada.trabalha)
-      ? 'FALTA'
-      : (valido ? formatMinutes(tol.trabalhadoMin) : 'Erro: Ímpar');
+    : (just.abonaDiaInteiro && !temBatidas)
+      ? 'JUSTIFICADA'
+      : (!temBatidas && previstoMin > 0 && jornada.trabalha)
+        ? 'FALTA'
+        : (valido ? formatMinutes(tol.trabalhadoMin) : 'Erro: Ímpar');
 
   return {
     data,
@@ -195,11 +222,18 @@ export function calcularDia({
     trabalhadoMin: tol.trabalhadoMin,
     trabalhadoBrutoMin: tol.trabalhadoBruto,
     normaisMin,
-    extraMin: extras.extraMin,
-    debitoMin: faltas.faltaMin,
-    faltaMin: faltas.faltaMin,
-    faltaJustificadaMin: faltas.faltaJustificadaMin,
-    atrasoMin: faltas.atrasoMin,
+    extraMin: extraFinalMin,
+    debitoMin: faltaFinalMin,
+    faltaMin: faltaFinalMin,
+    faltaJustificadaMin: faltaJustificadaFinalMin,
+    atrasoMin: atrasoFinalMin,
+    saldoDiaMin,
+    abonoMin: just.abonoFaltaMin,
+    abonoJustificativaMin: just.abonoFaltaMin,
+    ajusteMin: just.ajusteMin,
+    bancoAjusteMin: just.bancoMin + just.ajusteMin,
+    protegeDSR: just.protegeDSR,
+    justificativas: just.itens,
     toleranciaMin: tol.toleranciaMin,
     toleranciaAplicada: tol.toleranciaMin,
 
@@ -208,14 +242,14 @@ export function calcularDia({
     adicionalNoturno: noturno.adicionalPct,
     horasNoturnas: Math.round(noturno.reduzidoMin),
 
-    extraFaixa1: extras.extraFaixa1,
-    extraFaixa2: extras.extraFaixa2,
+    extraFaixa1: extraRelocado ? 0 : extras.extraFaixa1,
+    extraFaixa2: extraRelocado ? 0 : extras.extraFaixa2,
     faixa1Pct: extras.faixa1Pct,
     faixa2Pct: extras.faixa2Pct,
     percentualHE: extras.percentualMedio,
-    extraDiurnoMin: extras.extraDiurnoMin,
-    extraNoturnoMin: extras.extraNoturnoMin,
-    tipoHora: extras.extraMin > 0 ? tipoParaExtras : '',
+    extraDiurnoMin: extraRelocado ? 0 : extras.extraDiurnoMin,
+    extraNoturnoMin: extraRelocado ? 0 : extras.extraNoturnoMin,
+    tipoHora: extraFinalMin > 0 ? tipoParaExtras : '',
 
     intervaloPrevistoMin: jornada.intervaloPrevistoMin,
     intervaloRealMin: intervalo.realMin,
@@ -248,6 +282,7 @@ export function calcularPeriodo({
   feriados = [],
   jornadas = {},
   preAssinaladas = {},
+  justificativas = [],
   bancoSaldoInicial = 0,
 } = {}) {
   const paramsNorm = normalizarParams(params);
@@ -270,12 +305,22 @@ export function calcularPeriodo({
   const consumidas = new Set();
   const linhas = [];
 
+  const justificativasPorDia = {};
+  for (const j of justificativas || []) {
+    const dataJ = String(j.data || '').slice(0, 10);
+    if (!dataJ || String(j.funcionario_id) !== String(funcionario?.id)) continue;
+    const chaveJ = `${docFunc}_${dataJ}`;
+    if (!justificativasPorDia[chaveJ]) justificativasPorDia[chaveJ] = [];
+    justificativasPorDia[chaveJ].push(j);
+  }
+
   for (const data of datas) {
     const chave = `${docFunc}_${data}`;
     const correcao = correcoes[chave] || {};
     const descartadas = marcacoesDescartadas[chave] || [];
     const diaDesconsiderado = diasDescartados[chave] || null;
     const jornadaOverride = jornadas[data] || null;
+    const justificativasDia = justificativasPorDia[chave] || [];
 
     let marcacoesDia = (porData[data] || []).filter((m) => !consumidas.has(m.__id));
 
@@ -319,6 +364,7 @@ export function calcularPeriodo({
       feriados,
       jornadaOverride,
       preAssinaladas: preAssinaladas[data] || [],
+      justificativas: justificativasDia,
     });
     linhas.push(linha);
   }
@@ -368,6 +414,8 @@ export function resumirLinhas(linhas = [], banco = null) {
     totalExtraDiurno: 0,
     totalExtraNoturno: 0,
     totalIntervaloFaltante: 0,
+    totalAbono: 0,
+    totalAjuste: 0,
   };
 
   for (const l of linhas) {
@@ -385,11 +433,14 @@ export function resumirLinhas(linhas = [], banco = null) {
     t.totalExtraDiurno += l.extraDiurnoMin || 0;
     t.totalExtraNoturno += l.extraNoturnoMin || 0;
     t.totalIntervaloFaltante += l.intervaloFaltanteMin || 0;
+    t.totalAbono += l.abonoJustificativaMin || 0;
+    t.totalAjuste += l.ajusteMin || 0;
   }
 
   return {
     ...t,
     saldo: t.totalTrabalhado - t.totalPrevisto,
+    saldoAjustado: t.totalTrabalhado - t.totalPrevisto + t.totalAbono + t.totalAjuste,
     bancoSaldoFinal: banco?.saldoFinal ?? 0,
     // Compatibilidade com a UI atual
     totalEsp: t.totalPrevisto,
@@ -412,6 +463,7 @@ export function calcularTodos({
   diasDescartados = {},
   marcacoesDescartadas = {},
   feriados = [],
+  justificativas = [],
   dataInicio,
   dataFim,
 } = {}) {
@@ -436,6 +488,7 @@ export function calcularTodos({
       diasDescartados,
       marcacoesDescartadas,
       feriados,
+      justificativas,
     });
   });
 }

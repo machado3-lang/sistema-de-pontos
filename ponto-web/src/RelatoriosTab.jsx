@@ -53,7 +53,7 @@ function downloadTxt(filename, content) {
   URL.revokeObjectURL(url);
 }
 
-function gerarLinhasFunc(doc, func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriados = [], jornadaExcecoes = []) {
+function gerarLinhasFunc(doc, func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriados = [], jornadaExcecoes = [], justificativas = []) {
   const horario = horarios.find(h => String(h.id) === String(func.horario_id));
   const params = parametrosMap[String(func.parametro_id)] || parametrosMap['_default'] || {};
   const feriadosFunc = feriadosParaFuncionario(feriados, func, horario);
@@ -88,6 +88,7 @@ function gerarLinhasFunc(doc, func, marcacoes, horarios, dataInicio, dataFim, co
     marcacoesDescartadas,
     feriados: feriadosFunc,
     jornadas,
+    justificativas,
   });
 
   const linhas = resultado.linhas
@@ -116,6 +117,10 @@ function gerarLinhasFunc(doc, func, marcacoes, horarios, dataInicio, dataFim, co
       toleranciaAplicada: l.toleranciaMin,
       dsrMin: l.dsrMin,
       bancoMin: l.bancoMin,
+      saldoDiaMin: l.saldoDiaMin,
+      abonoMin: l.abonoMin,
+      justificativa: l.justificativa,
+      justificativas: l.justificativas || [],
     }));
 
   return {
@@ -208,12 +213,16 @@ export default function RelatoriosTab({ usuario }) {
   const [cargos, setCargos] = useState(() => carregarLocal('ponto_cargos', []));
   const [feriados, setFeriados] = useState(() => lerCache('feriados', []));
   const [jornadaExcecoes, setJornadaExcecoes] = useState([]);
+  const [justificativas, setJustificativas] = useState([]);
 
   useEffect(() => {
     if (!dataInicio || !dataFim) return undefined;
     let ativo = true;
     api.jornadaExcecoes.list({ data_inicio: dataInicio, data_fim: dataFim })
       .then((lista) => { if (ativo) setJornadaExcecoes(Array.isArray(lista) ? lista : []); })
+      .catch(() => {});
+    api.justificativas.list({ data_inicio: dataInicio, data_fim: dataFim })
+      .then((lista) => { if (ativo) setJustificativas(Array.isArray(lista) ? lista : []); })
       .catch(() => {});
     return () => { ativo = false; };
   }, [dataInicio, dataFim]);
@@ -306,11 +315,11 @@ export default function RelatoriosTab({ usuario }) {
   const dadosFunc = useMemo(() => {
     if (!visaoTodos && selectedFunc) {
       const { doc, func } = selectedFunc;
-      return gerarLinhasFunc(doc, func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriados, jornadaExcecoes);
+      return gerarLinhasFunc(doc, func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriados, jornadaExcecoes, justificativas);
     }
     if (visaoTodos) {
       const todos = funcComMarcacoes.map(f => {
-        const dados = gerarLinhasFunc(f.doc, f.func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriados, jornadaExcecoes);
+        const dados = gerarLinhasFunc(f.doc, f.func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriados, jornadaExcecoes, justificativas);
         return { ...f, ...dados };
       });
       const agg = todos.reduce((acc, t) => {
@@ -322,7 +331,7 @@ export default function RelatoriosTab({ usuario }) {
       return { todos, ...agg, saldo: agg.totalTrab - agg.totalEsp };
     }
     return null;
-  }, [selectedFunc, visaoTodos, funcComMarcacoes, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriados, jornadaExcecoes]);
+  }, [selectedFunc, visaoTodos, funcComMarcacoes, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriados, jornadaExcecoes, justificativas]);
 
   const toggleColuna = (key) => {
     setColunasVisiveis(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -389,7 +398,7 @@ export default function RelatoriosTab({ usuario }) {
     lines.push(r(String(seq).padStart(9, '0'), 9) + '1' + tpIdt + r(idtEmp, 14) + r('', 12) + r((company.razao_social || company.nome || 'EMPRESA').substring(0, 150), 150) + r(toDMA(dataInicio), 8) + r(toDMA(dataFim), 8) + r(toDMA(now.toISOString().slice(0, 10)), 8) + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0'));
     const numRep = '0'.repeat(17);
     funcComMarcacoes.forEach(f => {
-      const dados = gerarLinhasFunc(f.doc, f.func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriados, jornadaExcecoes);
+      const dados = gerarLinhasFunc(f.doc, f.func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriados, jornadaExcecoes, justificativas);
       dados.linhas.forEach(l => {
         if (l.descartado) return;
         let parIdx = 0;
@@ -447,7 +456,7 @@ export default function RelatoriosTab({ usuario }) {
       }
     });
     funcComMarcacoes.forEach(f => {
-      const dados = gerarLinhasFunc(f.doc, f.func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriados, jornadaExcecoes);
+      const dados = gerarLinhasFunc(f.doc, f.func, marcacoes, horarios, dataInicio, dataFim, correcoes, diasDescartados, parametrosMap, marcacoesDescartadas, feriados, jornadaExcecoes, justificativas);
       const pis = String(f.func.pis || '').padStart(12, '0');
       const params = parametrosMap[String(f.func.parametro_id)] || parametrosMap['_default'] || {};
       const horario = horarios.find(h => String(h.id) === String(f.func.horario_id));
@@ -717,7 +726,7 @@ export default function RelatoriosTab({ usuario }) {
       case 'previsto': return formatMinutos(l.carga);
       case 'trabalhado': return l.descartado ? <span style={{ color: 'var(--danger)' }}>F</span> : formatMinutos(l.trabalhado);
       case 'saldo': {
-        const s = l.trabalhado - l.carga;
+        const s = l.saldoDiaMin ?? (l.trabalhado - l.carga);
         if (l.descartado) return '—';
         return <span style={{ color: s > 0 ? 'var(--warning)' : s < -30 ? 'var(--danger)' : 'var(--success)' }}>{(s >= 0 ? '+' : '') + formatMinutos(Math.abs(s))}</span>;
       }
@@ -731,7 +740,11 @@ export default function RelatoriosTab({ usuario }) {
       case 'dsr': return l.dsrMin > 0 ? formatMinutos(l.dsrMin) : '—';
       case 'banco': return l.bancoMin !== 0 ? formatMinutos(l.bancoMin) : '—';
       case 'tolerancia': return l.toleranciaAplicada > 0 ? formatMinutos(l.toleranciaAplicada) : '—';
-      case 'obs': return l.descartado ? `Falta: ${l.descartado_motivo}` : l.toleranciaAplicada > 0 ? `Tol: ${formatMinutos(l.toleranciaAplicada)}` : l.tipoHora ? `${l.percentualHE}%` : '';
+      case 'obs': {
+        const nomes = (l.justificativas || []).map(j => j.tipo_nome).filter(Boolean);
+        if (nomes.length) return `Just.: ${nomes.join(', ')}`;
+        return l.descartado ? `Falta: ${l.descartado_motivo}` : l.toleranciaAplicada > 0 ? `Tol: ${formatMinutos(l.toleranciaAplicada)}` : l.tipoHora ? `${l.percentualHE}%` : '';
+      }
       default: return '';
     }
   };

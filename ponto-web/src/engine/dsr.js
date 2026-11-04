@@ -29,7 +29,7 @@ export function calcularDSR({ linhas = [], params = {} } = {}) {
     });
 
     const totalHE = dias.reduce((acc, l) => acc + (l.extraMin || 0), 0);
-    const diasComFalta = dias.filter((l) => (l.faltaMin || 0) > 0).length;
+    const diasComFalta = dias.filter((l) => (l.faltaMin || 0) > 0 && !l.protegeDSR).length;
     const mediaHE = diasUteis > 0 ? totalHE / diasUteis : 0;
     let valor = mediaHE * descansos.length * ((cfg.percentual_sobre_he ?? 100) / 100);
 

@@ -843,3 +843,48 @@ Testes do motor cobrem:
 
 Leiautes de referência no repositório: `afd_leiaute.pdf`, `afd_texto.txt`,
 `leiaute-do-arquivo-eletronico-de-jornada-aej.pdf` e `aej_texto.txt`.
+
+---
+
+## 23. Justificativas aplicadas no motor (04/11/2026)
+
+Os lançamentos de justificativa passaram a afetar o cálculo do dia, não são
+apenas registro.
+
+### Motor (engine/justification.js + calculator.js)
+
+- dia_inteiro + bona_falta: zera a falta do dia e soma em
+  altaJustificadaMin.
+- periodo: abona os minutos do intervalo (inicio/im) do débito.
+- horas + bona_horas: abona minutos do débito.
+- juste: soma/subtrai minutos do saldo (saldoDiaMin).
+- anco + gera_banco: reloca o extra/falta do dia para o banco
+  (ancoAjusteMin).
+- dsr + protege_dsr: o dia deixa de contar como falta no DSR.
+
+Campos novos por linha: bonoMin, altaJustificadaMin, saldoDiaMin,
+justeMin, ancoAjusteMin, protegeDSR, justificativas[].
+
+### Apuração
+
+- O formulário mostra os campos conforme o tipo:
+  - período -> início/fim;
+  - horas/ajuste -> minutos (ajuste aceita negativo);
+  - exige_cid -> CID;
+  - exige_anexo -> anexo.
+- A grade usa debitoMin e 
+ormaisMin do motor (refletem abono) e mostra o
+  abono na coluna Justif.
+- O painel mostra cartões de Abonado, Ajuste de saldo e DSR protegido.
+
+### Relatórios
+
+- O espelho de ponto carrega as justificativas do período, aplica no motor, usa
+  saldoDiaMin na coluna Saldo e mostra o tipo em Obs.
+- O ACJEF usa o débito já abonado.
+
+### Testes
+
+
+pm run test:engine cobre os seis comportamentos e a proteção de DSR.
+O smoke test da API valida período, minutos, CID e anexo da justificativa.

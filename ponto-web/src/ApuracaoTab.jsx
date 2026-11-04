@@ -40,6 +40,11 @@ export default function ApuracaoTab({ usuario }) {
   const [jornadaExcecoes, setJornadaExcecoes] = useState([]);
   const [tipoJustificativaId, setTipoJustificativaId] = useState('');
   const [textoJustificativa, setTextoJustificativa] = useState('');
+  const [inicioJustificativa, setInicioJustificativa] = useState('');
+  const [fimJustificativa, setFimJustificativa] = useState('');
+  const [minutosJustificativa, setMinutosJustificativa] = useState('');
+  const [cidJustificativa, setCidJustificativa] = useState('');
+  const [anexoJustificativa, setAnexoJustificativa] = useState('');
 
   useEffect(() => {
     api.justificativaTipos.list()
@@ -187,6 +192,7 @@ export default function ApuracaoTab({ usuario }) {
         marcacoesDescartadas,
         feriados: feriadosParaFuncionario(feriados, func, horario),
         jornadas,
+        justificativas,
       });
 
       grouped[doc] = {};
@@ -211,6 +217,13 @@ export default function ApuracaoTab({ usuario }) {
           carga_esperada: l.previstoMin,
           extraMin: l.extraMin,
           debitoMin: l.debitoMin,
+          faltaJustificadaMin: l.faltaJustificadaMin,
+          normaisMin: l.normaisMin,
+          saldoDiaMin: l.saldoDiaMin,
+          abonoMin: l.abonoMin,
+          ajusteMin: l.ajusteMin,
+          protegeDSR: l.protegeDSR,
+          justificativas: l.justificativas || [],
           tipoHora: l.tipoHora,
           percentualHE: l.percentualHE,
           extraFaixa1: l.extraFaixa1,
@@ -226,7 +239,7 @@ export default function ApuracaoTab({ usuario }) {
       }
     }
     return grouped;
-  }, [marcacoes, correcoes, diasDesconsiderados, marcacoesDescartadas, funcMap, funcionarios, horarios, parametrosMap, feriados, jornadaExcecoes, dataInicio, dataFim]);
+  }, [marcacoes, correcoes, diasDesconsiderados, marcacoesDescartadas, funcMap, funcionarios, horarios, parametrosMap, feriados, jornadaExcecoes, justificativas, dataInicio, dataFim]);
 
   const pendencias = useMemo(() => {
     const list = [];
@@ -238,7 +251,7 @@ export default function ApuracaoTab({ usuario }) {
         const nome = func?.nome || `Func. ${doc.slice(0, 4)}...`;
         if (searchTerm && !nome.toLowerCase().includes(searchTerm.toLowerCase()) && !doc.includes(searchTerm)) continue;
         const cargaEsperada = info.carga_esperada || 0;
-        const diff = info.descartado ? 0 : info.total_minutos - cargaEsperada;
+        const diff = info.descartado ? 0 : (info.saldoDiaMin ?? (info.total_minutos - cargaEsperada));
         let tipo = 'success';
         let status = 'Ok';
         let problema = 'Dentro do esperado';
@@ -274,6 +287,13 @@ export default function ApuracaoTab({ usuario }) {
           batidas_manuais: info.batidas_manuais,
           batidas_descartadas: info.batidas_descartadas || [],
           extraMin: info.extraMin, debitoMin: info.debitoMin,
+          faltaJustificadaMin: info.faltaJustificadaMin || 0,
+          normaisMin: info.normaisMin || 0,
+          saldoDiaMin: info.saldoDiaMin || 0,
+          abonoMin: info.abonoMin || 0,
+          ajusteMin: info.ajusteMin || 0,
+          protegeDSR: !!info.protegeDSR,
+          justificativas: info.justificativas || [],
           tipoHora: info.tipoHora, percentualHE: info.percentualHE || 0,
           extraFaixa1: info.extraFaixa1 || 0, extraFaixa2: info.extraFaixa2 || 0,
           faixa1Pct: info.faixa1Pct || 0, faixa2Pct: info.faixa2Pct || 0,
@@ -293,10 +313,16 @@ export default function ApuracaoTab({ usuario }) {
   const [somenteInconsistencias, setSomenteInconsistencias] = useState(false);
   const linhasGrade = pendencias.filter((p) => {
     if (!somenteInconsistencias) return true;
-    return !p.valido || p.descartado || Math.abs(p.total_minutos - p.carga_esperada) > 120;
+    const saldo = p.saldoDiaMin ?? (p.total_minutos - p.carga_esperada);
+    return !p.valido || p.descartado || Math.abs(saldo) > 120;
   });
 
   const selectedPendencia = pendencias.find(p => p.id === selectedFunc);
+
+  const tipoJustificativaSelecionado = justificativaTipos.find(
+    (t) => String(t.id) === String(tipoJustificativaId)
+  ) || null;
+  const comportamentoJustificativa = tipoJustificativaSelecionado?.tipo || '';
 
   const jornadaExcecaoDoDia = selectedPendencia
     ? jornadaExcecoes.find((e) => (
@@ -342,15 +368,57 @@ export default function ApuracaoTab({ usuario }) {
 
   const handleAplicarJustificativa = async () => {
     if (!selectedPendencia || !tipoJustificativaId) return;
+    const tipo = justificativaTipos.find((t) => String(t.id) === String(tipoJustificativaId));
+    const comportamento = tipo?.tipo || '';
+    const minutosNum = Number(minutosJustificativa);
+
+    if (comportamento === 'periodo') {
+      if (!inicioJustificativa || !fimJustificativa) {
+        alert('Informe o início e o fim do período a abonar.');
+        return;
+      }
+      if (fimJustificativa <= inicioJustificativa) {
+        alert('O fim do período precisa ser maior que o início.');
+        return;
+      }
+    }
+    if ((comportamento === 'horas' || comportamento === 'ajuste')
+      && (!Number.isFinite(minutosNum) || minutosNum === 0)) {
+      alert(comportamento === 'ajuste'
+        ? 'Informe os minutos do ajuste (use negativo para subtrair).'
+        : 'Informe quantos minutos devem ser abonados.');
+      return;
+    }
+    if (tipo?.exige_cid && !cidJustificativa.trim()) {
+      alert('Este tipo de justificativa exige o CID.');
+      return;
+    }
+    if (tipo?.exige_anexo && !anexoJustificativa.trim()) {
+      alert('Este tipo de justificativa exige um anexo (URL ou referência).');
+      return;
+    }
+
     try {
       await api.justificativas.create({
         funcionario_id: selectedPendencia.funcionario_id,
         tipo_id: tipoJustificativaId,
         data: selectedPendencia.data,
+        inicio: comportamento === 'periodo' ? inicioJustificativa : null,
+        fim: comportamento === 'periodo' ? fimJustificativa : null,
+        minutos: (comportamento === 'horas' || comportamento === 'ajuste')
+          ? Math.trunc(minutosNum)
+          : null,
         texto: textoJustificativa || null,
+        cid: cidJustificativa || null,
+        anexo_url: anexoJustificativa || null,
       });
       setTextoJustificativa('');
       setTipoJustificativaId('');
+      setInicioJustificativa('');
+      setFimJustificativa('');
+      setMinutosJustificativa('');
+      setCidJustificativa('');
+      setAnexoJustificativa('');
       await recarregarJustificativas();
     } catch (e) {
       alert('Erro ao aplicar justificativa: ' + e.message);
@@ -502,8 +570,8 @@ export default function ApuracaoTab({ usuario }) {
                   ) : linhasGrade.map((p) => {
                     const trabalhado = p.total_minutos || 0;
                     const previsto = p.carga_esperada || 0;
-                    const normais = Math.min(trabalhado, previsto);
-                    const atraso = Math.max(0, previsto - trabalhado);
+                    const normais = p.normaisMin ?? Math.min(trabalhado, previsto);
+                    const atraso = p.debitoMin ?? Math.max(0, previsto - trabalhado);
                     return (
                       <tr
                         key={p.id}
@@ -530,7 +598,14 @@ export default function ApuracaoTab({ usuario }) {
                         <td>
                           {(() => {
                             const js = justificativasDoDia(p.funcionario_id, p.data);
-                            if (js.length > 0) return js.map((j) => j.tipo_nome || 'Justificada').join(', ');
+                            if (js.length > 0) {
+                              return (
+                                <span title={js.map((j) => j.tipo_nome).join(', ')}>
+                                  {js.map((j) => j.tipo_nome || 'Justificada').join(', ')}
+                                  {p.abonoMin > 0 ? ` (+${formatMinutos(p.abonoMin)})` : ''}
+                                </span>
+                              );
+                            }
                             return p.justificativa ? 'Correção' : '—';
                           })()}
                         </td>
@@ -571,8 +646,8 @@ export default function ApuracaoTab({ usuario }) {
               </div>
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--glass-border)', padding: '1rem', borderRadius: '8px' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Saldo</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (selectedPendencia.total_minutos - selectedPendencia.carga_esperada) > 0 ? 'var(--warning)' : 'var(--success)' }}>
-                  {selectedPendencia.valido ? formatMinutos(Math.abs(selectedPendencia.total_minutos - selectedPendencia.carga_esperada)) : '—'}
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (selectedPendencia.saldoDiaMin ?? (selectedPendencia.total_minutos - selectedPendencia.carga_esperada)) > 0 ? 'var(--warning)' : 'var(--success)' }}>
+                  {selectedPendencia.valido ? formatMinutos(Math.abs(selectedPendencia.saldoDiaMin ?? (selectedPendencia.total_minutos - selectedPendencia.carga_esperada))) : '—'}
                 </div>
               </div>
               <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--glass-border)', padding: '1rem', borderRadius: '8px' }}>
@@ -657,7 +732,7 @@ export default function ApuracaoTab({ usuario }) {
               </div>
             </div>
 
-            {(selectedPendencia.extraMin > 0 || selectedPendencia.horasNoturnas > 0 || selectedPendencia.toleranciaAplicada > 0 || selectedPendencia.debitoMin > 0) && (
+            {(selectedPendencia.extraMin > 0 || selectedPendencia.horasNoturnas > 0 || selectedPendencia.toleranciaAplicada > 0 || selectedPendencia.debitoMin > 0 || selectedPendencia.abonoMin > 0 || selectedPendencia.ajusteMin !== 0 || selectedPendencia.faltaJustificadaMin > 0) && (
               <div style={{ marginBottom: '2rem' }}>
                 <h4 style={{ marginBottom: '0.75rem', color: 'var(--text-secondary)' }}>Detalhamento</h4>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '0.75rem' }}>
@@ -678,6 +753,26 @@ export default function ApuracaoTab({ usuario }) {
                     <div style={{ background: 'rgba(230,46,46,0.1)', border: '1px solid rgba(230,46,46,0.3)', padding: '0.75rem', borderRadius: '8px' }}>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Débito</div>
                       <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--danger)' }}>{formatMinutos(selectedPendencia.debitoMin)}</div>
+                    </div>
+                  )}
+                  {selectedPendencia.abonoMin > 0 && (
+                    <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', padding: '0.75rem', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Abonado</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--success)' }}>{formatMinutos(selectedPendencia.abonoMin)}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>por justificativa</div>
+                    </div>
+                  )}
+                  {selectedPendencia.ajusteMin !== 0 && (
+                    <div style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', padding: '0.75rem', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Ajuste de saldo</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--accent-primary)' }}>{selectedPendencia.ajusteMin > 0 ? '+' : '-'}{formatMinutos(Math.abs(selectedPendencia.ajusteMin))}</div>
+                    </div>
+                  )}
+                  {selectedPendencia.protegeDSR && (
+                    <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', padding: '0.75rem', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>DSR</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--success)' }}>Protegido</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>falta não desconta DSR</div>
                     </div>
                   )}
                   {selectedPendencia.horasNoturnas > 0 && (
@@ -762,32 +857,88 @@ export default function ApuracaoTab({ usuario }) {
 
             <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--glass-border)' }}>
               <h4 style={{ marginBottom: '0.75rem', color: 'var(--text-secondary)' }}>Justificativas</h4>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                <select
-                  className="form-input"
-                  style={{ flex: 1, minWidth: '180px' }}
-                  value={tipoJustificativaId}
-                  onChange={e => setTipoJustificativaId(e.target.value)}
-                >
-                  <option value="">Tipo de justificativa...</option>
-                  {justificativaTipos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
-                </select>
-                <input
-                  className="form-input"
-                  style={{ flex: 1, minWidth: '160px' }}
-                  placeholder="Observação (opcional)"
-                  value={textoJustificativa}
-                  onChange={e => setTextoJustificativa(e.target.value)}
-                />
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: 1, minWidth: '180px', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Tipo</label>
+                  <select
+                    className="form-input"
+                    value={tipoJustificativaId}
+                    onChange={e => setTipoJustificativaId(e.target.value)}
+                  >
+                    <option value="">Selecione...</option>
+                    {justificativaTipos.filter(t => t.ativo !== false).map(t => (
+                      <option key={t.id} value={t.id}>{t.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {comportamentoJustificativa === 'periodo' && (
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Início</label>
+                      <input type="time" className="form-input" value={inicioJustificativa} onChange={e => setInicioJustificativa(e.target.value)} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Fim</label>
+                      <input type="time" className="form-input" value={fimJustificativa} onChange={e => setFimJustificativa(e.target.value)} />
+                    </div>
+                  </>
+                )}
+
+                {(comportamentoJustificativa === 'horas' || comportamentoJustificativa === 'ajuste') && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      {comportamentoJustificativa === 'ajuste' ? 'Minutos (negativo subtrai)' : 'Minutos a abonar'}
+                    </label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      style={{ width: '150px' }}
+                      value={minutosJustificativa}
+                      onChange={e => setMinutosJustificativa(e.target.value)}
+                      placeholder={comportamentoJustificativa === 'ajuste' ? 'Ex.: -60' : 'Ex.: 60'}
+                    />
+                  </div>
+                )}
+
+                {tipoJustificativaSelecionado?.exige_cid && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>CID</label>
+                    <input className="form-input" style={{ width: '120px' }} value={cidJustificativa} onChange={e => setCidJustificativa(e.target.value)} placeholder="Ex.: J11" />
+                  </div>
+                )}
+
+                {tipoJustificativaSelecionado?.exige_anexo && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Anexo (URL/ref.)</label>
+                    <input className="form-input" style={{ minWidth: '160px' }} value={anexoJustificativa} onChange={e => setAnexoJustificativa(e.target.value)} placeholder="Ex.: atestado.pdf" />
+                  </div>
+                )}
+
+                <div style={{ flex: 1, minWidth: '160px', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Observação</label>
+                  <input
+                    className="form-input"
+                    placeholder="Opcional"
+                    value={textoJustificativa}
+                    onChange={e => setTextoJustificativa(e.target.value)}
+                  />
+                </div>
                 <button
                   className="btn-primary"
                   onClick={handleAplicarJustificativa}
                   disabled={!tipoJustificativaId}
-                  style={{ whiteSpace: 'nowrap' }}
+                  style={{ whiteSpace: 'nowrap', height: '38px' }}
                 >
                   Aplicar
                 </button>
               </div>
+
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
+                O efeito no dia segue o tipo: abono de falta, abono por período/horas, ajuste de saldo,
+                relocação para o banco ou proteção do DSR.
+              </p>
+
               <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 {justificativasDoDia(selectedPendencia.funcionario_id, selectedPendencia.data).length === 0 ? (
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Nenhuma justificativa lançada neste dia.</span>
@@ -795,6 +946,9 @@ export default function ApuracaoTab({ usuario }) {
                   <div key={j.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', background: 'var(--bg-primary)', padding: '0.4rem 0.6rem', borderRadius: '6px' }}>
                     <span>
                       <strong style={{ color: 'var(--accent-primary)' }}>{j.tipo_nome}</strong>
+                      {j.tipo_comportamento === 'periodo' && j.inicio && j.fim ? ` — ${j.inicio} às ${j.fim}` : ''}
+                      {(j.tipo_comportamento === 'horas' || j.tipo_comportamento === 'ajuste') && j.minutos ? ` — ${j.minutos} min` : ''}
+                      {j.cid ? ` — CID ${j.cid}` : ''}
                       {j.texto ? ` — ${j.texto}` : ''}
                     </span>
                     <button

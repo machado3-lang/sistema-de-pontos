@@ -504,8 +504,12 @@ try {
       funcionario_id: funcionario.id,
       tipo_id: justTipo.id,
       data: '2026-10-30',
+      inicio: '08:00',
+      fim: '09:00',
       minutos: 60,
       texto: 'Teste automatizado',
+      cid: 'J11',
+      anexo_url: 'atestado.pdf',
     },
   });
   ok('criar justificativa');
@@ -513,6 +517,16 @@ try {
   const justificativasList = await req('GET', `/api/justificativas?funcionario_id=${funcionario.id}`, { token });
   if (!Array.isArray(justificativasList) || !justificativasList.some((j) => j.id === justificativa.id)) {
     throw new Error('justificativa não listada');
+  }
+  const justListada = justificativasList.find((j) => j.id === justificativa.id);
+  if (justListada.tipo_comportamento !== 'dia_inteiro' || justListada.abona_falta !== true) {
+    throw new Error('justificativa não trouxe o comportamento do tipo');
+  }
+  if (justListada.inicio !== '08:00' || justListada.fim !== '09:00' || Number(justListada.minutos) !== 60) {
+    throw new Error('justificativa não preservou período/minutos');
+  }
+  if (justListada.cid !== 'J11' || justListada.anexo_url !== 'atestado.pdf') {
+    throw new Error('justificativa não preservou CID/anexo');
   }
   ok('listar justificativas');
 
