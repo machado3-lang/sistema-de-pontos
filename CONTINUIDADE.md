@@ -725,3 +725,38 @@ Redesenhar a **Apuração** para o modelo de tabela do RHiD:
 3. Edição inline da marcação com motivo (já temos `correcoes`).
 4. Destaque de inconsistências e dias fechados.
 5. Botão de espelho/CSV por linha.
+
+---
+
+## 20. Feriados por âmbito e justificativas (04/11/2026)
+
+### Modelo implementado
+
+- Migration `009_feriados_justificativas.sql`:
+  - `funcionarios.cidade` / `uf`;
+  - `feriados.uf`, `cidade`, `alvo_empresa_id`;
+  - `justificativa_tipos` e `justificativas`.
+- Feriado agora tem **âmbito pelo tipo**:
+  - `nacional` → todos;
+  - `estadual` → UF do funcionário;
+  - `municipal` → cidade/UF do funcionário;
+  - `empresa` → empresa escolhida.
+- O formulário de feriado mostra o campo de vínculo conforme o tipo.
+- **Feriado como dia normal fica no Horário** (`considerar_feriado_dia_normal`),
+  não no feriado. Quando ligado, o motor não considera feriado para aquele
+  funcionário (não gera extra).
+- `feriadosParaFuncionario()` filtra os feriados por funcionário + horário.
+- Tipos de justificativa com 6 comportamentos:
+  - dia inteiro, período, abonar horas, ajustar horas, relocar para banco, só DSR;
+  - flags: abona falta, abona horas, protege DSR, gera banco, exige CID, exige anexo.
+- Aba **Cadastros → Justificativas** para CRUD dos tipos.
+- Endpoints:
+  - `GET/POST/PUT/DELETE /api/justificativa-tipos`
+  - `GET/POST/PUT/DELETE /api/justificativas`
+
+### Ainda falta
+
+- Aplicar as justificativas no motor (abono/ajuste/banco/DSR).
+- Redesenhar a Apuração em grade (funcionário × dia) com edição inline.
+- Inconsistências configuráveis.
+- Relatório de justificativas e ocorrências.

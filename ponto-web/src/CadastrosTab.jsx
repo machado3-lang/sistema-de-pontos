@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ClipboardList } from 'lucide-react';
 import { api } from './api';
 import { isValidCPF, isUUID, Users, Building2, Clock, Briefcase, Cpu, Sliders, Calendar } from './cadastros/CadastrosUtils';
 import {
@@ -19,6 +20,7 @@ import ParametrosSection from './cadastros/ParametrosSection';
 import EquipamentoSection from './cadastros/EquipamentoSection';
 import UsuariosSection from './cadastros/UsuariosSection';
 import FeriadosSection from './cadastros/FeriadosSection';
+import JustificativaTiposSection from './cadastros/JustificativaTiposSection';
 
 export default function CadastrosTab({ usuario }) {
   const podeEditar = usuario?.role !== 'consulta';
@@ -38,7 +40,8 @@ export default function CadastrosTab({ usuario }) {
   const [form, setForm] = useState({
     nome: '', cpf: '', pis: '', senha: '', matricula: '', folha: '', foto: '',
     empresa_id: '', data_admissao: '', departamento: '', cargo: '', horario_id: '',
-    parametro_id: '', data_inicio: '', ativo: true, data_demissao: '', motivo_demissao: ''
+    parametro_id: '', data_inicio: '', ativo: true, data_demissao: '', motivo_demissao: '',
+    cidade: '', uf: ''
   });
 
   const normalizarFuncionario = (f) => {
@@ -81,7 +84,7 @@ export default function CadastrosTab({ usuario }) {
   useEffect(() => { carregarDadosBase(); }, []);
 
   const resetForm = () => {
-    setForm({ nome: '', cpf: '', pis: '', senha: '', matricula: '', folha: '', foto: '', empresa_id: '', data_admissao: '', departamento: '', cargo: '', horario_id: '', parametro_id: '', data_inicio: '', ativo: true, data_demissao: '', motivo_demissao: '' });
+    setForm({ nome: '', cpf: '', pis: '', senha: '', matricula: '', folha: '', foto: '', empresa_id: '', data_admissao: '', departamento: '', cargo: '', horario_id: '', parametro_id: '', data_inicio: '', ativo: true, data_demissao: '', motivo_demissao: '', cidade: '', uf: '' });
     setEditandoId(null);
     setHistHorarios([]);
   };
@@ -99,6 +102,8 @@ export default function CadastrosTab({ usuario }) {
       motivo_demissao: form.motivo_demissao || null,
       data_inicio: form.data_inicio || null,
       ativo: form.ativo !== false,
+      cidade: form.cidade || null,
+      uf: form.uf || null,
       departamento_id: isUUID(form.departamento) ? form.departamento : null,
       cargo_id: isUUID(form.cargo) ? form.cargo : null,
       horario_id: isUUID(form.horario_id) ? form.horario_id : null,
@@ -129,7 +134,7 @@ export default function CadastrosTab({ usuario }) {
   };
 
   const handleEditarFuncionario = async (func) => {
-    setForm({ nome: func.nome || '', cpf: func.cpf || '', pis: func.pis || '', senha: '', matricula: func.matricula || '', folha: func.folha || '', foto: func.foto || '', empresa_id: func.empresa_id || '', data_admissao: func.data_admissao || '', departamento: func.departamento || '', cargo: func.cargo || '', horario_id: func.horario_id || '', parametro_id: func.parametro_id || '', data_inicio: func.data_inicio || '', ativo: func.ativo !== false, data_demissao: func.data_demissao || '', motivo_demissao: func.motivo_demissao || '' });
+    setForm({ nome: func.nome || '', cpf: func.cpf || '', pis: func.pis || '', senha: '', matricula: func.matricula || '', folha: func.folha || '', foto: func.foto || '', empresa_id: func.empresa_id || '', data_admissao: func.data_admissao || '', departamento: func.departamento || '', cargo: func.cargo || '', horario_id: func.horario_id || '', parametro_id: func.parametro_id || '', data_inicio: func.data_inicio || '', ativo: func.ativo !== false, data_demissao: func.data_demissao || '', motivo_demissao: func.motivo_demissao || '', cidade: func.cidade || '', uf: func.uf || '' });
     setEditandoId(func.id);
     setSubTab('editar_func');
     try {
@@ -182,6 +187,7 @@ export default function CadastrosTab({ usuario }) {
         { key: 'cargos', icon: <Users size={16} />, label: 'Cargos' },
         { key: 'parametros', icon: <Sliders size={16} />, label: 'Parâmetros' },
         { key: 'feriados', icon: <Calendar size={16} />, label: 'Feriados' },
+        { key: 'justificativas', icon: <ClipboardList size={16} />, label: 'Justificativas' },
         { key: 'equipamentos', icon: <Cpu size={16} />, label: 'Equipamentos' },
         ...(usuario?.role === 'admin'
           ? [{ key: 'usuarios', icon: <Users size={16} />, label: 'Usuários' }]
@@ -216,6 +222,7 @@ export default function CadastrosTab({ usuario }) {
       {(subTab === 'departamentos' || subTab === 'cargos') && <AuxiliaresSection subTab={subTab} departamentos={departamentos} setDepartamentos={setDepartamentos} cargos={cargos} setCargos={setCargos} parametros={[]} setParametros={() => {}} funcionarios={funcionarios} podeEditar={podeEditar} />}
       {subTab === 'parametros' && <ParametrosSection onVoltar={() => setSubTab('lista_func')} />}
       {subTab === 'feriados' && <FeriadosSection podeEditar={podeEditar} />}
+      {subTab === 'justificativas' && <JustificativaTiposSection podeEditar={podeEditar} />}
       {(subTab === 'equipamentos' || subTab === 'novo_equip' || subTab === 'editar_equip') && <EquipamentoSection subTab={subTab} setSubTab={setSubTab} empresas={empresas} funcionarios={funcionarios} />}
       {subTab === 'usuarios' && usuario?.role === 'admin' && <UsuariosSection usuarioAtual={usuario} />}
     </div>

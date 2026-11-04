@@ -136,6 +136,47 @@ async function bloqueadoPeloPeriodo(res, empresa, data) {
   return false;
 }
 
+/**
+ * O tipo do feriado define o vínculo:
+ * nacional (nenhum), estadual (UF), municipal (UF + cidade), empresa (empresa).
+ */
+function validarFeriado(data) {
+  const tipo = data.tipo;
+  if (tipo === undefined) return data;
+
+  if (tipo === 'estadual' && !data.uf) {
+    const err = new Error('Informe a UF do feriado estadual');
+    err.status = 400;
+    throw err;
+  }
+  if (tipo === 'municipal' && (!data.uf || !data.cidade)) {
+    const err = new Error('Informe UF e cidade do feriado municipal');
+    err.status = 400;
+    throw err;
+  }
+  if (tipo === 'empresa' && !data.alvo_empresa_id) {
+    const err = new Error('Informe a empresa do feriado');
+    err.status = 400;
+    throw err;
+  }
+
+  if (tipo === 'nacional') {
+    data.uf = null;
+    data.cidade = null;
+    data.alvo_empresa_id = null;
+  } else if (tipo === 'estadual') {
+    data.cidade = null;
+    data.alvo_empresa_id = null;
+  } else if (tipo === 'municipal') {
+    data.alvo_empresa_id = null;
+  } else if (tipo === 'empresa') {
+    data.uf = null;
+    data.cidade = null;
+  }
+
+  return data;
+}
+
 function tratarErro(res, e, contexto) {
   if (e.code === 'DB_NOT_CONFIGURED') {
     return res.status(503).json({ error: 'Banco de dados não configurado' });
@@ -429,6 +470,8 @@ function funcionariosRouter() {
         matricula: body.matricula || null,
         folha: body.folha || null,
         foto: body.foto || null,
+        cidade: body.cidade || null,
+        uf: body.uf || null,
         data_admissao: body.data_admissao || null,
         data_demissao: body.data_demissao || null,
         motivo_demissao: body.motivo_demissao || null,
@@ -461,7 +504,7 @@ function funcionariosRouter() {
       const data = {};
 
       const simples = [
-        'nome', 'matricula', 'folha', 'foto', 'data_admissao', 'data_demissao',
+        'nome', 'matricula', 'folha', 'foto', 'cidade', 'uf', 'data_admissao', 'data_demissao',
         'motivo_demissao', 'departamento_id', 'cargo_id', 'horario_id',
         'parametro_id', 'data_inicio', 'ativo',
       ];
@@ -1037,6 +1080,158 @@ function bancoAjustesRouter() {
   return router;
 }
 
+// ── Justificativas ──────────────────────────────────────────────────────────
+
+function justificativasRouter() {
+  const router = Router();
+  router.use(bloqueioPeriodo);
+
+  router.get('/', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const params = [empresa];
+      const where = ['j.empresa_id = $1'];
+
+      if (req.query.funcionario_id) {
+        params.push(req.query.funcionario_id);
+        where.push(`j.funcionario_id = $${params.length}`);
+      }
+      if (req.query.tipo_id) {
+        params.push(req.query.tipo_id);
+        where.push(`j.tipo_id = $${params.length}`);
+      }
+      if (req.query.data_inicio) {
+        params.push(req.query.data_inicio);
+        where.push(`j.data >= $${params.length}::date`);
+      }
+      if (req.query.data_fim) {
+        params.push(req.query.data_fim);
+        where.push(`j.data <= $${params.length}::date`);
+      }
+
+      const { rows } = await query(
+        `SELECT j.id, j.funcionario_id, j.tipo_id,
+                to_char(j.data, 'YYYY-MM-DD') AS data,
+                to_char(j.inicio, 'HH24:MI') AS inicio,
+                to_char(j.fim, 'HH24:MI') AS fim,
+                j.minutos, j.texto, j.cid, j.anexo_url, j.created_at,
+                t.nome AS tipo_nome, t.tipo AS tipo_comportamento,
+                t.abona_falta, t.abona_horas, t.protege_dsr, t.gera_banco
+           FROM justificativas j
+           JOIN justificativa_tipos t ON t.id = j.tipo_id
+          WHERE ${where.join(' AND ')}
+          ORDER BY j.data DESC`,
+        params
+      );
+      res.json(rows);
+    } catch (e) {
+      tratarErro(res, e, 'justificativas.list');
+    }
+  });
+
+  router.post('/', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const b = req.body || {};
+      if (!b.funcionario_id || !b.tipo_id || !b.data) {
+        return res.status(400).json({ error: 'funcionario_id, tipo_id e data são obrigatórios' });
+      }
+      const { rows } = await query(
+        `INSERT INTO justificativas
+           (empresa_id, funcionario_id, tipo_id, data, inicio, fim, minutos, texto, cid, anexo_url, criado_por)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id, funcionario_id, tipo_id, to_char(data, 'YYYY-MM-DD') AS data,
+                   to_char(inicio, 'HH24:MI') AS inicio, to_char(fim, 'HH24:MI') AS fim,
+                   minutos, texto, cid, anexo_url`,
+        [
+          empresa,
+          b.funcionario_id,
+          b.tipo_id,
+          b.data,
+          b.inicio || null,
+          b.fim || null,
+          b.minutos !== undefined && b.minutos !== null && b.minutos !== '' ? parseInt(b.minutos, 10) : null,
+          b.texto || null,
+          b.cid || null,
+          b.anexo_url || null,
+          req.usuario.id,
+        ]
+      );
+      registrar(req, {
+        acao: 'criar',
+        entidade: 'justificativas',
+        entidadeId: rows[0].id,
+        detalhes: { funcionario_id: b.funcionario_id, data: b.data, tipo_id: b.tipo_id },
+      });
+      res.status(201).json(rows[0]);
+    } catch (e) {
+      tratarErro(res, e, 'justificativas.create');
+    }
+  });
+
+  router.put('/:id', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const b = req.body || {};
+      const { rows } = await query(
+        `UPDATE justificativas
+            SET tipo_id = COALESCE($1, tipo_id),
+                data = COALESCE($2::date, data),
+                inicio = $3,
+                fim = $4,
+                minutos = $5,
+                texto = $6,
+                cid = $7,
+                anexo_url = $8
+          WHERE id = $9 AND empresa_id = $10
+          RETURNING id, funcionario_id, tipo_id, to_char(data, 'YYYY-MM-DD') AS data,
+                    to_char(inicio, 'HH24:MI') AS inicio, to_char(fim, 'HH24:MI') AS fim,
+                    minutos, texto, cid, anexo_url`,
+        [
+          b.tipo_id || null,
+          b.data || null,
+          b.inicio || null,
+          b.fim || null,
+          b.minutos !== undefined && b.minutos !== null && b.minutos !== '' ? parseInt(b.minutos, 10) : null,
+          b.texto || null,
+          b.cid || null,
+          b.anexo_url || null,
+          req.params.id,
+          empresa,
+        ]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'Justificativa não encontrada' });
+      registrar(req, { acao: 'atualizar', entidade: 'justificativas', entidadeId: req.params.id });
+      res.json(rows[0]);
+    } catch (e) {
+      tratarErro(res, e, 'justificativas.update');
+    }
+  });
+
+  router.delete('/:id', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const data = await dataDoRegistro('justificativas', req.params.id, empresa);
+      if (data && await bloqueadoPeloPeriodo(res, empresa, data)) return;
+      const { rows } = await query(
+        'DELETE FROM justificativas WHERE id = $1 AND empresa_id = $2 RETURNING id',
+        [req.params.id, empresa]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'Justificativa não encontrada' });
+      registrar(req, { acao: 'excluir', entidade: 'justificativas', entidadeId: req.params.id });
+      res.json({ ok: true });
+    } catch (e) {
+      tratarErro(res, e, 'justificativas.delete');
+    }
+  });
+
+  return router;
+}
+
 // ── Router principal ────────────────────────────────────────────────────────
 
 export function createCadastrosRouter() {
@@ -1127,8 +1322,18 @@ export function createCadastrosRouter() {
   }));
   router.use('/feriados', simpleCrud({
     table: 'feriados',
-    columns: ['data', 'nome', 'tipo', 'recorrente'],
+    columns: ['data', 'nome', 'tipo', 'recorrente', 'uf', 'cidade', 'alvo_empresa_id'],
     orderBy: 'data ASC',
+    beforeCreate: validarFeriado,
+    beforeUpdate: validarFeriado,
+  }));
+  router.use('/justificativa-tipos', simpleCrud({
+    table: 'justificativa_tipos',
+    columns: [
+      'nome', 'abreviacao', 'tipo', 'abona_falta', 'abona_horas', 'protege_dsr',
+      'gera_banco', 'exige_cid', 'exige_anexo', 'tolerancia_min', 'ativo',
+    ],
+    orderBy: 'nome ASC',
   }));
   router.use('/equipamentos', simpleCrud({
     table: 'equipamentos',
@@ -1172,6 +1377,7 @@ export function createCadastrosRouter() {
   router.use('/correcoes', correcoesRouter());
   router.use('/dias-descartados', diasDescartadosRouter());
   router.use('/banco-horas/ajustes', bancoAjustesRouter());
+  router.use('/justificativas', justificativasRouter());
 
   return router;
 }

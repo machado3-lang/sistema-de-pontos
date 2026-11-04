@@ -174,6 +174,14 @@ export const api = {
     }),
   },
 
+  justificativaTipos: crud('justificativa-tipos'),
+  justificativas: {
+    list: (params = {}) => request(`/api/justificativas${qs(params)}`),
+    create: (data) => request('/api/justificativas', { method: 'POST', body: data }),
+    update: (id, data) => request(`/api/justificativas/${id}`, { method: 'PUT', body: data }),
+    remove: (id) => request(`/api/justificativas/${id}`, { method: 'DELETE' }),
+  },
+
   auditoria: {
     list: (params = {}) => request(`/api/auditoria${qs(params)}`),
   },

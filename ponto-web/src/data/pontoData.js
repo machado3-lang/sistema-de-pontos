@@ -74,6 +74,7 @@ const CAMPOS_CONFIG_HORARIO = [
   'dias_escala',
   'dias',
   'eventual',
+  'considerar_feriado_dia_normal',
 ];
 
 export function horarioDoBanco(row) {
@@ -296,27 +297,32 @@ export async function carregarFeriados() {
     data: String(r.data).slice(0, 10),
     tipo: r.tipo || 'municipal',
     recorrente: Boolean(r.recorrente),
+    uf: r.uf || '',
+    cidade: r.cidade || '',
+    alvo_empresa_id: r.alvo_empresa_id || '',
   }));
   gravarCache('feriados', lista);
   return lista;
 }
 
-export function criarFeriado(dados) {
-  return api.feriados.create({
+function feriadoParaBanco(dados) {
+  return {
     nome: dados.nome,
     data: dados.data,
     tipo: dados.tipo || 'municipal',
     recorrente: Boolean(dados.recorrente),
-  });
+    uf: dados.uf || null,
+    cidade: dados.cidade || null,
+    alvo_empresa_id: dados.alvo_empresa_id || null,
+  };
+}
+
+export function criarFeriado(dados) {
+  return api.feriados.create(feriadoParaBanco(dados));
 }
 
 export function atualizarFeriado(id, dados) {
-  return api.feriados.update(id, {
-    nome: dados.nome,
-    data: dados.data,
-    tipo: dados.tipo || 'municipal',
-    recorrente: Boolean(dados.recorrente),
-  });
+  return api.feriados.update(id, feriadoParaBanco(dados));
 }
 
 export function excluirFeriado(id) {
@@ -331,6 +337,38 @@ export function feriadosParaEngine(feriados = []) {
   return (feriados || []).map((f) => (
     f.recorrente ? String(f.data).slice(5) : String(f.data).slice(0, 10)
   ));
+}
+
+/**
+ * Feriados que se aplicam a um funcionário, considerando:
+ * - tipo (nacional/estadual/municipal/empresa);
+ * - cidade/UF do funcionário;
+ * - empresa do feriado;
+ * - flag "feriado como dia normal" do horário.
+ */
+export function feriadosParaFuncionario(feriados = [], funcionario = {}, horario = null) {
+  if (horario?.considerar_feriado_dia_normal) return [];
+
+  const ufFunc = String(funcionario?.uf || '').toUpperCase();
+  const cidadeFunc = String(funcionario?.cidade || '').trim().toLowerCase();
+  const empresaFunc = String(funcionario?.empresa_id || '');
+
+  return (feriados || [])
+    .filter((f) => {
+      if (f.tipo === 'nacional') return true;
+      if (f.tipo === 'estadual') {
+        return Boolean(f.uf) && String(f.uf).toUpperCase() === ufFunc;
+      }
+      if (f.tipo === 'municipal') {
+        return Boolean(f.uf) && String(f.uf).toUpperCase() === ufFunc
+          && Boolean(f.cidade) && String(f.cidade).trim().toLowerCase() === cidadeFunc;
+      }
+      if (f.tipo === 'empresa') {
+        return Boolean(f.alvo_empresa_id) && String(f.alvo_empresa_id) === empresaFunc;
+      }
+      return false;
+    })
+    .map((f) => (f.recorrente ? String(f.data).slice(5) : String(f.data).slice(0, 10)));
 }
 
 // ── Equipamentos (REPs) ─────────────────────────────────────────────────────

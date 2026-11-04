@@ -10,7 +10,7 @@ import {
   carregarParametros,
   carregarMarcacoes,
   carregarFeriados,
-  feriadosParaEngine,
+  feriadosParaFuncionario,
   salvarCorrecao,
   desconsiderarDia as desconsiderarDiaApi,
   restaurarDia as restaurarDiaApi,
@@ -71,7 +71,6 @@ export default function ApuracaoTab({ usuario }) {
   const [horarios, setHorarios] = useState(() => carregarLocal('ponto_horarios', []));
   const [parametrosMap, setParametrosMap] = useState(() => carregarParametrosMap());
   const [feriados, setFeriados] = useState(() => carregarLocal('ponto_feriados', []));
-  const feriadosEngine = useMemo(() => feriadosParaEngine(feriados), [feriados]);
 
   useEffect(() => {
     carregarHorarios()
@@ -150,7 +149,7 @@ export default function ApuracaoTab({ usuario }) {
         correcoes,
         diasDescartados: diasDesconsiderados,
         marcacoesDescartadas,
-        feriados: feriadosEngine,
+        feriados: feriadosParaFuncionario(feriados, func, horario),
       });
 
       grouped[doc] = {};
@@ -190,7 +189,7 @@ export default function ApuracaoTab({ usuario }) {
       }
     }
     return grouped;
-  }, [marcacoes, correcoes, diasDesconsiderados, marcacoesDescartadas, funcMap, funcionarios, horarios, parametrosMap, feriadosEngine, dataInicio, dataFim]);
+  }, [marcacoes, correcoes, diasDesconsiderados, marcacoesDescartadas, funcMap, funcionarios, horarios, parametrosMap, feriados, dataInicio, dataFim]);
 
   const pendencias = useMemo(() => {
     const list = [];

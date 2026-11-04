@@ -396,6 +396,24 @@ function HorarioForm({
                 </div>
               </div>
             )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Feriado como dia normal</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', height: '100%', paddingTop: '0.25rem' }}>
+                <button onClick={() => setHorForm(prev => ({ ...prev, considerar_feriado_dia_normal: !prev.considerar_feriado_dia_normal }))} style={{
+                  width: '44px', height: '24px', borderRadius: '12px', border: 'none', cursor: 'pointer', position: 'relative',
+                  background: horForm.considerar_feriado_dia_normal ? 'var(--warning, #f59e0b)' : 'var(--glass-border)', transition: 'background 0.2s'
+                }}>
+                  <div style={{
+                    width: '18px', height: '18px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '3px',
+                    left: horForm.considerar_feriado_dia_normal ? '24px' : '2px', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                  }} />
+                </button>
+                <span style={{ fontSize: '0.85rem', color: horForm.considerar_feriado_dia_normal ? 'var(--warning, #f59e0b)' : 'var(--text-muted)' }}>{horForm.considerar_feriado_dia_normal ? 'Sim' : 'Não'}</span>
+              </div>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                Se sim, trabalhar no feriado não gera hora extra.
+              </span>
+            </div>
           </div>
         </div>
 
@@ -422,6 +440,7 @@ export default function HorarioSection({ horarios, setHorarios, subTab, setSubTa
   const [horForm, setHorForm] = useState({
     nome: '', tipo: 'Fixa', ativo: true, compensacao_semanal: false,
     adicional_noturno: '', hora_reduzida: false,
+    considerar_feriado_dia_normal: false,
     qtd_dias_escala: 7, data_inicio_escala: '',
     dias_escala: Array.from({ length: 7 }, (_, i) => ({
       nome: `Dia ${i + 1}`,
@@ -441,6 +460,7 @@ export default function HorarioSection({ horarios, setHorarios, subTab, setSubTa
     setHorForm({
       nome: '', tipo: 'Fixa', ativo: true, compensacao_semanal: false,
       adicional_noturno: '', hora_reduzida: false,
+      considerar_feriado_dia_normal: false,
       qtd_dias_escala: 7, data_inicio_escala: '',
       dias_escala: Array.from({ length: 7 }, (_, i) => ({
         nome: `Dia ${i + 1}`,
@@ -476,6 +496,7 @@ export default function HorarioSection({ horarios, setHorarios, subTab, setSubTa
       compensacao_semanal: hor.compensacao_semanal || false,
       adicional_noturno: hor.adicional_noturno || '',
       hora_reduzida: hor.hora_reduzida || false,
+      considerar_feriado_dia_normal: hor.considerar_feriado_dia_normal || false,
       qtd_dias_escala: hor.qtd_dias_escala || 7,
       data_inicio_escala: hor.data_inicio_escala || '',
       dias_escala: hor.dias_escala ? hor.dias_escala.map(d => ({ ...d, comp: d.comp || false })) : Array.from({ length: 7 }, (_, i) => ({

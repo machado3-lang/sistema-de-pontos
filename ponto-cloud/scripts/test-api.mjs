@@ -393,7 +393,13 @@ try {
 
   feriado = await req('POST', '/api/feriados', {
     token,
-    body: { data: `2099-12-${String((Number(sufixo) % 28) + 1).padStart(2, '0')}`, nome: `Teste ${sufixo}`, tipo: 'municipal' },
+    body: {
+      data: `2099-12-${String((Number(sufixo) % 28) + 1).padStart(2, '0')}`,
+      nome: `Teste ${sufixo}`,
+      tipo: 'municipal',
+      uf: 'SP',
+      cidade: 'São Paulo',
+    },
   });
   ok('criar feriado');
 
@@ -405,9 +411,58 @@ try {
 
   await req('PUT', `/api/feriados/${feriado.id}`, {
     token,
-    body: { recorrente: true, nome: `Teste ${sufixo} recorrente` },
+    body: {
+      recorrente: true,
+      nome: `Teste ${sufixo} recorrente`,
+      tipo: 'municipal',
+      uf: 'SP',
+      cidade: 'São Paulo',
+    },
   });
   ok('atualizar feriado');
+
+  const justTipo = await req('POST', '/api/justificativa-tipos', {
+    token,
+    body: {
+      nome: `Teste Just ${sufixo}`,
+      abreviacao: 'TJ',
+      tipo: 'dia_inteiro',
+      abona_falta: true,
+      abona_horas: true,
+      protege_dsr: true,
+    },
+  });
+  ok('criar tipo de justificativa');
+
+  const justTipos = await req('GET', '/api/justificativa-tipos', { token });
+  if (!Array.isArray(justTipos) || !justTipos.some((t) => t.id === justTipo.id)) {
+    throw new Error('tipo de justificativa não listado');
+  }
+  ok('listar tipos de justificativa');
+
+  const justificativa = await req('POST', '/api/justificativas', {
+    token,
+    body: {
+      funcionario_id: funcionario.id,
+      tipo_id: justTipo.id,
+      data: '2026-10-30',
+      minutos: 60,
+      texto: 'Teste automatizado',
+    },
+  });
+  ok('criar justificativa');
+
+  const justificativasList = await req('GET', `/api/justificativas?funcionario_id=${funcionario.id}`, { token });
+  if (!Array.isArray(justificativasList) || !justificativasList.some((j) => j.id === justificativa.id)) {
+    throw new Error('justificativa não listada');
+  }
+  ok('listar justificativas');
+
+  await req('DELETE', `/api/justificativas/${justificativa.id}`, { token });
+  ok('excluir justificativa');
+
+  await req('DELETE', `/api/justificativa-tipos/${justTipo.id}`, { token });
+  ok('excluir tipo de justificativa');
 
   if (API_TOKEN) {
     await req('POST', '/api/push/event', {

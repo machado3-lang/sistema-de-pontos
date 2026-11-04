@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { Camera, List } from 'lucide-react';
 import {
   Plus, X, Save, Clock, Users, Briefcase,
-  formatCPF, formatPIS
+  formatCPF, formatPIS, ESTADOS_BR
 } from './CadastrosUtils';
 import { salvarHistHorarios, criarDepartamento, criarCargo } from '../data/pontoData';
 import { useToast } from '../components/Toast';
@@ -163,6 +163,27 @@ export default function FuncionarioForm({
                     onChange={handlePisChange}
                     placeholder="000.00000.00-0"
                   />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Cidade</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={form.cidade || ''}
+                    onChange={e => setForm({ ...form, cidade: e.target.value })}
+                    placeholder="Ex.: São Paulo"
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>UF</label>
+                  <select
+                    className="form-input"
+                    value={form.uf || ''}
+                    onChange={e => setForm({ ...form, uf: e.target.value })}
+                  >
+                    <option value="">—</option>
+                    {ESTADOS_BR.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                  </select>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Nova senha (app mobile)</label>
