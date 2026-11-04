@@ -756,9 +756,19 @@ Redesenhar a **Apuração** para o modelo de tabela do RHiD:
   - `GET/POST/PUT/DELETE /api/justificativa-tipos`
   - `GET/POST/PUT/DELETE /api/justificativas`
 
+### Apuração em grade (v1)
+
+- Tabela de dias (funcionário × dia) com colunas: Dia, Funcionário, Batidas,
+  Previsto, Trabalhado, Normais, Noturno, Atraso, Extra, DSR, Banco, Status
+  e Justificativa.
+- Filtro **“Somente inconsistências”**.
+- Clique na linha abre o painel de tratamento (batida manual, desconsiderar dia
+  e justificativa por tipo).
+- As justificativas lançadas aparecem na coluna e no painel, com remoção.
+
 ### Ainda falta
 
 - Aplicar as justificativas no motor (abono/ajuste/banco/DSR).
-- Redesenhar a Apuração em grade (funcionário × dia) com edição inline.
+- Edição inline da batida direto na célula (hoje é no painel).
 - Inconsistências configuráveis.
 - Relatório de justificativas e ocorrências.

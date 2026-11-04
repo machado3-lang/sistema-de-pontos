@@ -34,6 +34,25 @@ export default function ApuracaoTab({ usuario }) {
   const [correcoes, setCorrecoes] = useState(() => carregarLocal('ponto_correcoes', {}));
   const [diasDesconsiderados, setDiasDesconsiderados] = useState(() => carregarLocal('ponto_dias_descartados', {}));
   const [marcacoesDescartadas, setMarcacoesDescartadas] = useState(() => carregarLocal('ponto_marcacoes_descartadas', {}));
+  const [justificativaTipos, setJustificativaTipos] = useState([]);
+  const [justificativas, setJustificativas] = useState([]);
+  const [tipoJustificativaId, setTipoJustificativaId] = useState('');
+  const [textoJustificativa, setTextoJustificativa] = useState('');
+
+  useEffect(() => {
+    api.justificativaTipos.list()
+      .then((d) => setJustificativaTipos(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!dataInicio || !dataFim) return undefined;
+    let ativo = true;
+    api.justificativas.list({ data_inicio: dataInicio, data_fim: dataFim })
+      .then((d) => { if (ativo) setJustificativas(Array.isArray(d) ? d : []); })
+      .catch(() => {});
+    return () => { ativo = false; };
+  }, [dataInicio, dataFim]);
 
   useEffect(() => {
     api.funcionarios.list().then((data) => {
@@ -253,12 +272,56 @@ export default function ApuracaoTab({ usuario }) {
     });
   }, [processedData, funcMap, funcionarios, searchTerm, dataInicio, dataFim]);
 
-  const pendentes = pendencias.filter(p => !p.valido || p.descartado || Math.abs(p.total_minutos - p.carga_esperada) > 120);
-  const apurados = pendencias.filter(p => p.valido && !p.descartado && Math.abs(p.total_minutos - p.carga_esperada) <= 120);
+  const [somenteInconsistencias, setSomenteInconsistencias] = useState(false);
+  const linhasGrade = pendencias.filter((p) => {
+    if (!somenteInconsistencias) return true;
+    return !p.valido || p.descartado || Math.abs(p.total_minutos - p.carga_esperada) > 120;
+  });
 
   const selectedPendencia = pendencias.find(p => p.id === selectedFunc);
 
   const hasMarkings = marcacoes.length > 0;
+
+  const justificativasDoDia = (funcionarioId, data) => justificativas.filter(
+    (j) => String(j.funcionario_id) === String(funcionarioId) && j.data === data
+  );
+
+  const recarregarJustificativas = async () => {
+    if (!dataInicio || !dataFim) return;
+    try {
+      const d = await api.justificativas.list({ data_inicio: dataInicio, data_fim: dataFim });
+      setJustificativas(Array.isArray(d) ? d : []);
+    } catch {
+      // Sem conexão: mantém a lista atual.
+    }
+  };
+
+  const handleAplicarJustificativa = async () => {
+    if (!selectedPendencia || !tipoJustificativaId) return;
+    try {
+      await api.justificativas.create({
+        funcionario_id: selectedPendencia.funcionario_id,
+        tipo_id: tipoJustificativaId,
+        data: selectedPendencia.data,
+        texto: textoJustificativa || null,
+      });
+      setTextoJustificativa('');
+      setTipoJustificativaId('');
+      await recarregarJustificativas();
+    } catch (e) {
+      alert('Erro ao aplicar justificativa: ' + e.message);
+    }
+  };
+
+  const handleRemoverJustificativa = async (id) => {
+    if (!window.confirm('Remover esta justificativa?')) return;
+    try {
+      await api.justificativas.remove(id);
+      await recarregarJustificativas();
+    } catch (e) {
+      alert('Erro ao remover justificativa: ' + e.message);
+    }
+  };
 
   const handleAplicarCorrecao = async () => {
     if (!selectedPendencia) return;
@@ -360,44 +423,78 @@ export default function ApuracaoTab({ usuario }) {
           </div>
         ) : (
           <>
-            <div>
-              <h3 style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.5rem' }}>
-                <AlertCircle size={20} color="var(--danger)" /> Exceções ({pendentes.length})
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+              <h3 style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <AlertCircle size={20} color="var(--accent-primary)" /> Apuração ({linhasGrade.length} dias)
               </h3>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {pendentes.length === 0 ? (
-                <div className="glass-card" style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                  Nenhuma exceção encontrada no período.
-                </div>
-              ) : (
-                pendentes.map(p => (
-                  <div key={p.id} className="glass-card" style={{
-                    padding: '1rem', cursor: 'pointer', borderLeft: `4px solid var(--${p.tipo})`,
-                    background: selectedFunc === p.id ? 'rgba(255,255,255,0.05)' : 'var(--glass-bg)'
-                  }} onClick={() => { setSelectedFunc(p.id); setBatidaManual(''); setJustificativa(''); }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <strong>{p.nome}</strong>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{p.data} — {p.equip}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                        <span className={`badge ${p.tipo}`}>{p.status}</span>
-                        {p.correcao_aplicada && <span style={{ fontSize: '0.7rem', color: 'var(--accent-primary)' }}>Corrigido</span>}
-                        {p.descartado && <span style={{ fontSize: '0.7rem', color: 'var(--danger)' }}>Falta</span>}
-                      </div>
-                      <ChevronRight size={18} color="var(--text-muted)" />
-                    </div>
-                  </div>
-                ))
-              )}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={somenteInconsistencias} onChange={(e) => setSomenteInconsistencias(e.target.checked)} />
+                Somente inconsistências
+              </label>
             </div>
 
-            <h3 style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2rem' }}>
-              <CheckCircle2 size={20} color="var(--success)" /> Dias Apurados ({apurados.length})
-            </h3>
-            <div className="glass-card" style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              {apurados.length} dias calculados perfeitamente sem necessidade de intervenção.
+            <div className="glass-card" style={{ padding: 0, overflow: 'auto' }}>
+              <table className="data-table" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                <thead>
+                  <tr>
+                    <th>Dia</th>
+                    <th>Funcionário</th>
+                    <th>Batidas</th>
+                    <th>Prev.</th>
+                    <th>Trab.</th>
+                    <th>Norm.</th>
+                    <th>Not.</th>
+                    <th>Atraso</th>
+                    <th>Extra</th>
+                    <th>DSR</th>
+                    <th>Banco</th>
+                    <th>Status</th>
+                    <th>Justif.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linhasGrade.length === 0 ? (
+                    <tr><td colSpan={13} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Nenhum dia no período.</td></tr>
+                  ) : linhasGrade.map((p) => {
+                    const trabalhado = p.total_minutos || 0;
+                    const previsto = p.carga_esperada || 0;
+                    const normais = Math.min(trabalhado, previsto);
+                    const atraso = Math.max(0, previsto - trabalhado);
+                    return (
+                      <tr
+                        key={p.id}
+                        onClick={() => { setSelectedFunc(p.id); setBatidaManual(''); setJustificativa(''); }}
+                        style={{
+                          cursor: 'pointer',
+                          background: selectedFunc === p.id ? 'rgba(99,102,241,0.12)' : undefined,
+                        }}
+                      >
+                        <td style={{ fontWeight: 600 }}>{p.data}</td>
+                        <td>{p.nome}</td>
+                        <td style={{ color: 'var(--text-secondary)' }}>
+                          {(p.batidas || []).join(' · ') || '—'}
+                        </td>
+                        <td>{formatMinutos(previsto)}</td>
+                        <td style={{ color: p.valido ? 'var(--success)' : 'var(--danger)' }}>{formatMinutos(trabalhado)}</td>
+                        <td>{formatMinutos(normais)}</td>
+                        <td>{formatMinutos(p.horasNoturnas || 0)}</td>
+                        <td style={{ color: atraso > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>{formatMinutos(atraso)}</td>
+                        <td style={{ color: (p.extraMin || 0) > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>{formatMinutos(p.extraMin || 0)}</td>
+                        <td>{formatMinutos(p.dsrMin || 0)}</td>
+                        <td>{formatMinutos(p.bancoMin || 0)}</td>
+                        <td><span className={`badge ${p.tipo}`}>{p.status}</span></td>
+                        <td>
+                          {(() => {
+                            const js = justificativasDoDia(p.funcionario_id, p.data);
+                            if (js.length > 0) return js.map((j) => j.tipo_nome || 'Justificada').join(', ');
+                            return p.justificativa ? 'Correção' : '—';
+                          })()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </>
         )}
@@ -587,6 +684,55 @@ export default function ApuracaoTab({ usuario }) {
                   Desconsiderar Dia (Falta)
                 </button>
               )}
+            </div>
+
+            <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--glass-border)' }}>
+              <h4 style={{ marginBottom: '0.75rem', color: 'var(--text-secondary)' }}>Justificativas</h4>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <select
+                  className="form-input"
+                  style={{ flex: 1, minWidth: '180px' }}
+                  value={tipoJustificativaId}
+                  onChange={e => setTipoJustificativaId(e.target.value)}
+                >
+                  <option value="">Tipo de justificativa...</option>
+                  {justificativaTipos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                </select>
+                <input
+                  className="form-input"
+                  style={{ flex: 1, minWidth: '160px' }}
+                  placeholder="Observação (opcional)"
+                  value={textoJustificativa}
+                  onChange={e => setTextoJustificativa(e.target.value)}
+                />
+                <button
+                  className="btn-primary"
+                  onClick={handleAplicarJustificativa}
+                  disabled={!tipoJustificativaId}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  Aplicar
+                </button>
+              </div>
+              <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                {justificativasDoDia(selectedPendencia.funcionario_id, selectedPendencia.data).length === 0 ? (
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Nenhuma justificativa lançada neste dia.</span>
+                ) : justificativasDoDia(selectedPendencia.funcionario_id, selectedPendencia.data).map(j => (
+                  <div key={j.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', background: 'var(--bg-primary)', padding: '0.4rem 0.6rem', borderRadius: '6px' }}>
+                    <span>
+                      <strong style={{ color: 'var(--accent-primary)' }}>{j.tipo_nome}</strong>
+                      {j.texto ? ` — ${j.texto}` : ''}
+                    </span>
+                    <button
+                      className="btn-primary"
+                      onClick={() => handleRemoverJustificativa(j.id)}
+                      style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem', background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', boxShadow: 'none' }}
+                    >
+                      remover
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
