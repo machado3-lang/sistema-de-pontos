@@ -786,3 +786,31 @@ Redesenhar a **Apuração** para o modelo de tabela do RHiD:
 - Edição inline da batida direto na célula (hoje é no painel).
 - Inconsistências configuráveis.
 - Relatório de justificativas e ocorrências.
+
+---
+
+## 21. Motivos de correção no AEJ (04/11/2026)
+
+A Portaria 671 exige, no **AEJ (registro tipo 05)**, o campo `motivo` quando a
+marcação é desconsiderada (`tpMarc = D`) ou incluída manualmente
+(`fonteMarc = I`).
+
+### Entregue
+
+- Migration `012_motivos_correcao.sql`:
+  - catálogo `motivos_correcao` (descrição + ativo);
+  - coluna `marcacoes_descartadas.motivo`.
+- Cadastros → **Motivos**: CRUD dos motivos.
+- Na Apuração, **Motivo da correção** é um campo com sugestões (datalist):
+  pode selecionar do catálogo ou digitar.
+- Ao desconsiderar uma marcação, o motivo passa a ser obrigatório e fica salvo.
+- AEJ:
+  - inclusões manuais (`I`) levam o motivo da correção;
+  - desconsiderações (`D`) geram registro com o motivo.
+- **Jornada do dia** agora lista apenas horários `Eventual`.
+
+### Ainda falta
+
+- Refinar a geração do AEJ (layout completo, assinatura P7S).
+- Gerar AFD com os mesmos motivos quando aplicável.
+- Aplicar justificativas no motor.

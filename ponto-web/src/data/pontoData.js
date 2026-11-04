@@ -530,13 +530,21 @@ export async function carregarApuracaoExtras(funcionarios = []) {
   }
 
   const marcacoesDescartadas = {};
+  const descartesInfo = [];
   for (const m of descartadasRows || []) {
     const funcionario = porId.get(String(m.funcionario_id));
     if (!funcionario) continue;
+    const hora = String(m.hora).slice(0, 5);
+    descartesInfo.push({
+      funcionario_id: m.funcionario_id,
+      data: m.data,
+      hora,
+      motivo: m.motivo || '',
+    });
     for (const doc of docsDoFuncionario(funcionario)) {
       const chave = `${doc}_${m.data}`;
       if (!marcacoesDescartadas[chave]) marcacoesDescartadas[chave] = [];
-      marcacoesDescartadas[chave].push(String(m.hora).slice(0, 5));
+      marcacoesDescartadas[chave].push(hora);
     }
   }
 
@@ -544,7 +552,7 @@ export async function carregarApuracaoExtras(funcionarios = []) {
   gravarCache('diasDescartados', diasDescartados);
   gravarCache('marcacoesDescartadas', marcacoesDescartadas);
 
-  return { correcoes, diasDescartados, marcacoesDescartadas };
+  return { correcoes, diasDescartados, marcacoesDescartadas, descartesInfo };
 }
 
 export function salvarCorrecao(funcionarioId, data, { batidas_manuais, justificativa }) {
@@ -564,8 +572,13 @@ export function restaurarDia(funcionarioId, data) {
   return api.diasDescartados.removeByKey(funcionarioId, data);
 }
 
-export function descartarMarcacao(funcionarioId, data, hora) {
-  return api.marcacoesDescartadas.create({ funcionario_id: funcionarioId, data, hora });
+export function descartarMarcacao(funcionarioId, data, hora, motivo) {
+  return api.marcacoesDescartadas.create({
+    funcionario_id: funcionarioId,
+    data,
+    hora,
+    motivo: motivo || null,
+  });
 }
 
 export function restaurarMarcacao(funcionarioId, data, hora) {

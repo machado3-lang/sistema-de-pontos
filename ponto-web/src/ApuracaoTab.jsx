@@ -35,6 +35,7 @@ export default function ApuracaoTab({ usuario }) {
   const [diasDesconsiderados, setDiasDesconsiderados] = useState(() => carregarLocal('ponto_dias_descartados', {}));
   const [marcacoesDescartadas, setMarcacoesDescartadas] = useState(() => carregarLocal('ponto_marcacoes_descartadas', {}));
   const [justificativaTipos, setJustificativaTipos] = useState([]);
+  const [motivosCorrecao, setMotivosCorrecao] = useState([]);
   const [justificativas, setJustificativas] = useState([]);
   const [jornadaExcecoes, setJornadaExcecoes] = useState([]);
   const [tipoJustificativaId, setTipoJustificativaId] = useState('');
@@ -43,6 +44,9 @@ export default function ApuracaoTab({ usuario }) {
   useEffect(() => {
     api.justificativaTipos.list()
       .then((d) => setJustificativaTipos(Array.isArray(d) ? d : []))
+      .catch(() => {});
+    api.motivosCorrecao.list()
+      .then((d) => setMotivosCorrecao(Array.isArray(d) ? d : []))
       .catch(() => {});
   }, []);
 
@@ -610,8 +614,14 @@ export default function ApuracaoTab({ usuario }) {
                             novas[key] = novas[key].filter(t => t !== time);
                             if (novas[key].length === 0) delete novas[key];
                           } else {
-                            if (!window.confirm(`Desconsiderar marcação "${time}" dos cálculos?\n\nIsso remove a batida apenas dos relatórios e cálculos.\nO registro original é preservado para fins fiscais.`)) return;
-                            await descartarMarcacao(funcionarioId, data, time);
+                            const sugestoes = motivosCorrecao.map(m => m.descricao).filter(Boolean);
+                            const motivo = window.prompt(
+                              `Motivo para desconsiderar a marcação "${time}":\n\nSugestões: ${sugestoes.join(' | ') || '(cadastre em Cadastros > Motivos)'}`,
+                              ''
+                            );
+                            if (motivo === null) return;
+                            if (!motivo.trim()) { alert('Informe o motivo da desconsideração.'); return; }
+                            await descartarMarcacao(funcionarioId, data, time, motivo.trim());
                             novas[key] = [...novas[key], time];
                           }
                           setMarcacoesDescartadas(novas);
@@ -722,13 +732,17 @@ export default function ApuracaoTab({ usuario }) {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <label style={{ fontSize: '0.85rem' }}>Motivo da correção</label>
-                <select className="form-input" style={{ width: '100%' }} value={justificativa} onChange={e => setJustificativa(e.target.value)}>
-                  <option value="">Selecione um motivo...</option>
-                  <option value="Esquecimento">Esquecimento</option>
-                  <option value="Problema no Relógio (REP)">Problema no Relógio (REP)</option>
-                  <option value="Atestado Médico">Atestado Médico</option>
-                  <option value="Autorização Excepcional">Autorização Excepcional</option>
-                </select>
+                <input
+                  className="form-input"
+                  list="motivos-correcao"
+                  style={{ width: '100%' }}
+                  value={justificativa}
+                  onChange={e => setJustificativa(e.target.value)}
+                  placeholder="Selecione ou digite o motivo"
+                />
+                <datalist id="motivos-correcao">
+                  {motivosCorrecao.map(m => <option key={m.id} value={m.descricao} />)}
+                </datalist>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '1rem', marginTop: 'auto' }}>

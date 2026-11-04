@@ -202,6 +202,7 @@ export default function RelatoriosTab({ usuario }) {
   const [correcoes, setCorrecoes] = useState(() => carregarLocal('ponto_correcoes', {}));
   const [diasDescartados, setDiasDescartados] = useState(() => carregarLocal('ponto_dias_descartados', {}));
   const [marcacoesDescartadas, setMarcacoesDescartadas] = useState(() => carregarLocal('ponto_marcacoes_descartadas', {}));
+  const [descartesInfo, setDescartesInfo] = useState([]);
   const [parametrosMap, setParametrosMap] = useState(() => carregarParametrosMap());
   const [departamentos, setDepartamentos] = useState(() => carregarLocal('ponto_departamentos', []));
   const [cargos, setCargos] = useState(() => carregarLocal('ponto_cargos', []));
@@ -234,6 +235,7 @@ export default function RelatoriosTab({ usuario }) {
         setCorrecoes(extras.correcoes);
         setDiasDescartados(extras.diasDescartados);
         setMarcacoesDescartadas(extras.marcacoesDescartadas);
+        setDescartesInfo(Array.isArray(extras.descartesInfo) ? extras.descartesInfo : []);
       })
       .catch(() => {
         // Sem conexão: mantém o cache local.
@@ -590,6 +592,7 @@ export default function RelatoriosTab({ usuario }) {
       const sortedDates = Object.keys(days).sort();
       for (const dateStr of sortedDates) {
         const corr = correcoes[`${f.doc}_${dateStr}`];
+        const descartadas = marcacoesDescartadas[`${f.doc}_${dateStr}`] || [];
         if (corr?.batidas_manuais) {
           for (const tm of corr.batidas_manuais) {
             days[dateStr].push({ time: tm, src: 'I' });
@@ -609,7 +612,7 @@ export default function RelatoriosTab({ usuario }) {
               pad(parIdx, 3),
               batidas[i].src,
               parIdx === 1 ? codHor : '',
-              ''
+              batidas[i].src === 'I' ? (corr?.justificativa || 'Inclusão manual') : ''
             ]));
             counts['05']++;
           }
@@ -623,7 +626,7 @@ export default function RelatoriosTab({ usuario }) {
               pad(parIdx, 3),
               batidas[i + 1].src,
               '',
-              ''
+              batidas[i + 1].src === 'I' ? (corr?.justificativa || 'Inclusão manual') : ''
             ]));
             counts['05']++;
           } else if (batidas[i]) {
@@ -640,6 +643,25 @@ export default function RelatoriosTab({ usuario }) {
             ]));
             counts['05']++;
           }
+        }
+        for (const tm of descartadas) {
+          const info = descartesInfo.find((d) => (
+            String(d.funcionario_id) === String(f.func.id)
+            && d.data === dateStr
+            && d.hora === tm
+          ));
+          lines.push(p([
+            '05',
+            String(vinculoId),
+            `${dateStr}T${hm(tm).slice(0, 2)}:${hm(tm).slice(2, 4)}:00${tz}`,
+            '1',
+            'D',
+            '000',
+            'O',
+            '',
+            info?.motivo || 'Desconsideração de marcação'
+          ]));
+          counts['05']++;
         }
       }
       if (f.func.matricula) {

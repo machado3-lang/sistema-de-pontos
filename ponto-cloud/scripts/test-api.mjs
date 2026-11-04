@@ -346,15 +346,35 @@ try {
   }
   ok('listar dias descartados');
 
+  const motivoCorrecao = await req('POST', '/api/motivos-correcao', {
+    token,
+    body: { descricao: `Motivo ${sufixo}` },
+  });
+  ok('criar motivo de correção');
+
+  const motivosList = await req('GET', '/api/motivos-correcao', { token });
+  if (!Array.isArray(motivosList) || !motivosList.some((m) => m.id === motivoCorrecao.id)) {
+    throw new Error('motivo de correção não listado');
+  }
+  ok('listar motivos de correção');
+
   await req('POST', '/api/marcacoes-descartadas', {
     token,
-    body: { funcionario_id: funcionario.id, data: '2026-10-30', hora: '12:00' },
+    body: {
+      funcionario_id: funcionario.id,
+      data: '2026-10-30',
+      hora: '12:00',
+      motivo: motivoCorrecao.descricao,
+    },
   });
   ok('criar marcação descartada');
 
   const descartadasList = await req('GET', `/api/marcacoes-descartadas?funcionario_id=${funcionario.id}`, { token });
   if (!Array.isArray(descartadasList) || descartadasList.length < 1) {
     throw new Error('marcação descartada não listada');
+  }
+  if (!descartadasList.some((d) => d.motivo === motivoCorrecao.descricao)) {
+    throw new Error('motivo da marcação desconsiderada não foi salvo');
   }
   ok('listar marcações descartadas');
 
@@ -370,6 +390,9 @@ try {
     { token }
   );
   ok('remover marcação descartada por chave');
+
+  await req('DELETE', `/api/motivos-correcao/${motivoCorrecao.id}`, { token });
+  ok('excluir motivo de correção');
 
   const diaFechamento = `2099-02-${String((Number(sufixo) % 28) + 1).padStart(2, '0')}`;
   const periodoFechado = await req('POST', '/api/periodos/fechar', {

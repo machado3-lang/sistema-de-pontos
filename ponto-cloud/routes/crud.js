@@ -927,7 +927,7 @@ function marcacoesDescartadasRouter() {
       }
       const { rows } = await query(
         `SELECT id, funcionario_id, to_char(data, 'YYYY-MM-DD') AS data,
-                to_char(hora, 'HH24:MI:SS') AS hora, created_at
+                to_char(hora, 'HH24:MI:SS') AS hora, motivo, created_at
            FROM marcacoes_descartadas
           WHERE ${where.join(' AND ')}
           ORDER BY data DESC, hora ASC`,
@@ -948,12 +948,12 @@ function marcacoesDescartadasRouter() {
         return res.status(400).json({ error: 'funcionario_id, data e hora são obrigatórios' });
       }
       const { rows } = await query(
-        `INSERT INTO marcacoes_descartadas (empresa_id, funcionario_id, data, hora)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO marcacoes_descartadas (empresa_id, funcionario_id, data, hora, motivo)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (empresa_id, funcionario_id, data, hora) DO NOTHING
          RETURNING id, funcionario_id, to_char(data, 'YYYY-MM-DD') AS data,
-                   to_char(hora, 'HH24:MI:SS') AS hora`,
-        [empresa, b.funcionario_id, b.data, b.hora]
+                   to_char(hora, 'HH24:MI:SS') AS hora, motivo`,
+        [empresa, b.funcionario_id, b.data, b.hora, b.motivo || null]
       );
       registrar(req, { acao: 'criar', entidade: 'marcacoes_descartadas', entidadeId: rows[0]?.id, detalhes: { funcionario_id: b.funcionario_id, data: b.data, hora: b.hora } });
       res.status(201).json(rows[0] || { ok: true, duplicate: true });
@@ -1597,6 +1597,11 @@ export function createCadastrosRouter() {
       'gera_banco', 'exige_cid', 'exige_anexo', 'tolerancia_min', 'ativo',
     ],
     orderBy: 'nome ASC',
+  }));
+  router.use('/motivos-correcao', simpleCrud({
+    table: 'motivos_correcao',
+    columns: ['descricao', 'ativo'],
+    orderBy: 'descricao ASC',
   }));
   router.use('/equipamentos', simpleCrud({
     table: 'equipamentos',
