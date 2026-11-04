@@ -105,6 +105,7 @@ function DashboardLayout({ onLogout, usuario }) {
           nome: nomesAfd[doc] || '',
         }));
 
+        let erroImportacao = '';
         if (matched.length > 0) {
           try {
             await api.marcacoes.import(matched.map(m => ({
@@ -118,18 +119,21 @@ function DashboardLayout({ onLogout, usuario }) {
               equip_nome: m.equip_nome,
               origem: 'afd',
             })));
+            erroImportacao = '';
           } catch (e) {
+            erroImportacao = e.message || 'Falha ao gravar as marcações no servidor.';
             console.warn('Falha ao importar marcações no servidor:', e.message);
           }
         }
 
         setImportResult({
           total: resultado.totalBatidas,
-          importadas: matched.length,
+          importadas: erroImportacao ? 0 : matched.length,
           descartadas: unmatched.length,
           funcNaoCadastrados: unmatchedDocs.size,
           naoEncontrados,
           cabecalho: resultado.cabecalho || null,
+          erroImportacao,
           validacao,
         });
       }, 500);
@@ -256,6 +260,12 @@ function DashboardLayout({ onLogout, usuario }) {
                     <div style={{ fontWeight: 600, color: importResult.descartadas > 0 ? 'var(--danger)' : 'var(--success)' }}>{importResult.descartadas} batidas{importResult.funcNaoCadastrados > 0 && ` (${importResult.funcNaoCadastrados} func. não cadastrados)`}</div>
                   </div>
                 </div>
+
+                {importResult.erroImportacao && (
+                  <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.75rem', borderRadius: '8px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: 'var(--danger)', fontSize: '0.82rem' }}>
+                    Não foi possível gravar as marcações no servidor: {importResult.erroImportacao}
+                  </div>
+                )}
 
                 {importResult.validacao && (
                   <div style={{ marginTop: '0.75rem', paddingTop: '0.5rem', borderTop: '1px solid var(--glass-border)', fontSize: '0.8rem' }}>

@@ -913,7 +913,9 @@ Ajustes no upload do Dashboard (`ponto-web/src/App.jsx`):
   de arquivos diferentes não colide e reimportar o mesmo arquivo é idempotente;
 - o resultado da importação lista os **documentos sem funcionário cadastrado**,
   com o nome vindo do registro tipo 5, e orienta o cadastro do CPF/PIS;
-- exibe o empregador do cabeçalho do AFD.
+- exibe o empregador do cabeçalho do AFD;
+- se a gravação no servidor falhar, o resultado mostra o erro e não conta as
+  marcações como importadas.
 
 ### Fluxo recomendado para o teste com AFD real
 
