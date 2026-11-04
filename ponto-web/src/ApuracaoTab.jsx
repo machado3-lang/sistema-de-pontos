@@ -3,6 +3,7 @@ import { Search, AlertCircle, Clock, CheckCircle2, ChevronRight, Edit2, Calendar
 import { carregarParametrosMap } from './cadastros/parametrosUtils';
 import { calcularPeriodo, formatMinutes as formatMinutos } from './engine/index.js';
 import { api } from './api';
+import FechamentoPeriodo from './components/FechamentoPeriodo';
 import {
   carregarApuracaoExtras,
   carregarHorarios,
@@ -20,7 +21,7 @@ function carregarLocal(key, padrao) {
   try { return JSON.parse(localStorage.getItem(key)) || padrao; } catch { return padrao; }
 }
 
-export default function ApuracaoTab() {
+export default function ApuracaoTab({ usuario }) {
   const [selectedFunc, setSelectedFunc] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [dataInicio, setDataInicio] = useState('');
@@ -336,6 +337,12 @@ export default function ApuracaoTab() {
             </div>
           </div>
         </div>
+
+        <FechamentoPeriodo
+          dataInicio={dataInicio}
+          dataFim={dataFim}
+          role={usuario?.role}
+        />
 
         {!hasMarkings ? (
           <div className="glass-card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>

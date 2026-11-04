@@ -613,7 +613,9 @@ npm run test:engine
   correções, dias descartados, marcações descartadas e ajustes de banco em
   datas de períodos fechados. Importação de marcações valida o intervalo.
 - Frontend:
-  - `components/FechamentoPeriodo.jsx` na aba **Relatórios → Fiscais**.
+  - `components/FechamentoPeriodo.jsx` na aba **Apuração** (operação de RH).
+  - A aba **Relatórios → Fiscais** ficou apenas com AFD/AFDT/ACJEF/AEJ,
+    que são arquivos para fiscalização do MTE e emitidos sob solicitação.
   - Fechar período, ver resumo, reabrir (admin) e histórico de reaberturas.
 
 ### Como validar

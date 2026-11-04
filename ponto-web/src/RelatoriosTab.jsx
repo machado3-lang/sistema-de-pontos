@@ -3,7 +3,6 @@ import { FileText, Download, Users, Printer, Eye, EyeOff } from 'lucide-react';
 import { carregarParametrosMap, formatMinutos, calcMinutos } from './cadastros/parametrosUtils';
 import { calcularPeriodo } from './engine/index.js';
 import { api } from './api';
-import FechamentoPeriodo from './components/FechamentoPeriodo';
 import {
   carregarHorarios,
   carregarParametros,
@@ -118,7 +117,7 @@ function gerarLinhasFunc(doc, func, marcacoes, horarios, dataInicio, dataFim, co
   };
 }
 
-export default function RelatoriosTab({ usuario }) {
+export default function RelatoriosTab() {
   const [subTab, setSubTab] = useState('espelho');
   const [searchTerm, setSearchTerm] = useState('');
   const [dataInicio, setDataInicio] = useState(() => { const d = new Date(); d.setDate(1); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); });
@@ -866,43 +865,40 @@ export default function RelatoriosTab({ usuario }) {
   };
 
   const renderFiscais = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <FechamentoPeriodo
-        dataInicio={dataInicio}
-        dataFim={dataFim}
-        role={usuario?.role}
-      />
-      <div className="glass-card" style={{ padding: '1.5rem' }}>
-        <h4 style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>Exportação de Arquivos Fiscais</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-          <div style={{ background: 'var(--bg-primary)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-            <h5 style={{ marginBottom: '0.5rem' }}>AFD</h5>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Arquivo Fonte de Dados — batidas brutas do REP.</p>
-            <button className="btn-primary" onClick={handleExportAFD} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Download size={16} /> Exportar AFD
-            </button>
-          </div>
-          <div style={{ background: 'var(--bg-primary)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-            <h5 style={{ marginBottom: '0.5rem' }}>ADFT</h5>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Arquivo Digital de Folha de Trabalho — resumo por funcionário.</p>
-            <button className="btn-primary" onClick={handleExportADFT} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Download size={16} /> Exportar ADFT
-            </button>
-          </div>
-          <div style={{ background: 'var(--bg-primary)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-            <h5 style={{ marginBottom: '0.5rem' }}>ACJEF</h5>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Arquivo de Controle de Jornada Eletrônico (Portaria 671).</p>
-            <button className="btn-primary" onClick={handleExportACJEF} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Download size={16} /> Exportar ACJEF
-            </button>
-          </div>
-          <div style={{ background: 'var(--bg-primary)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-            <h5 style={{ marginBottom: '0.5rem' }}>AEJ</h5>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Arquivo Eletrônico de Jornada (Portaria 671) — pipe-delimited ISO-8859-1.</p>
-            <button className="btn-primary" onClick={handleExportAEJ} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Download size={16} /> Exportar AEJ
-            </button>
-          </div>
+    <div className="glass-card" style={{ padding: '1.5rem' }}>
+      <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Exportação de Arquivos Fiscais</h4>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+        Arquivos destinados à fiscalização do Ministério do Trabalho (Portarias 671/1510),
+        emitidos sob solicitação. O fechamento operacional do período fica em <strong>Apuração</strong>.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+        <div style={{ background: 'var(--bg-primary)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+          <h5 style={{ marginBottom: '0.5rem' }}>AFD</h5>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Arquivo Fonte de Dados — batidas brutas do REP.</p>
+          <button className="btn-primary" onClick={handleExportAFD} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Download size={16} /> Exportar AFD
+          </button>
+        </div>
+        <div style={{ background: 'var(--bg-primary)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+          <h5 style={{ marginBottom: '0.5rem' }}>ADFT</h5>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Arquivo Digital de Folha de Trabalho — resumo por funcionário.</p>
+          <button className="btn-primary" onClick={handleExportADFT} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Download size={16} /> Exportar ADFT
+          </button>
+        </div>
+        <div style={{ background: 'var(--bg-primary)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+          <h5 style={{ marginBottom: '0.5rem' }}>ACJEF</h5>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Arquivo de Controle de Jornada Eletrônico (Portaria 671).</p>
+          <button className="btn-primary" onClick={handleExportACJEF} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Download size={16} /> Exportar ACJEF
+          </button>
+        </div>
+        <div style={{ background: 'var(--bg-primary)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+          <h5 style={{ marginBottom: '0.5rem' }}>AEJ</h5>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Arquivo Eletrônico de Jornada (Portaria 671) — pipe-delimited ISO-8859-1.</p>
+          <button className="btn-primary" onClick={handleExportAEJ} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Download size={16} /> Exportar AEJ
+          </button>
         </div>
       </div>
     </div>
