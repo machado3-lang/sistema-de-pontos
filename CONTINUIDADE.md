@@ -814,3 +814,32 @@ marcação é desconsiderada (`tpMarc = D`) ou incluída manualmente
 - Refinar a geração do AEJ (layout completo, assinatura P7S).
 - Gerar AFD com os mesmos motivos quando aplicável.
 - Aplicar justificativas no motor.
+
+---
+
+## 22. AFD — parser e validador (04/11/2026)
+
+Reescrevi `ponto-web/src/engine/afd.js` com o leiaute oficial:
+
+- **Tipo 3** (REP-C / REP-A): 1510 (DDMMYYYY + HHMM + PIS) e 671 (DH 24 + CPF 12).
+- **Tipo 7** (REP-P): iDFace, mobile e browser — antes era ignorado.
+- **Tipo 1** cabeçalho, **tipo 5** empregados, **tipo 6** eventos e **tipo 9**
+  trailer.
+
+`validarAFD(conteudo)` devolve:
+
+- `ok`, `erros`, `avisos`;
+- resumo: portaria, versão, empregador, período, marcações (tipo 3 e 7),
+  funcionários e eventos.
+
+O upload de AFD no Dashboard agora mostra a validação (portaria, versão,
+período, quantidade por tipo, erros e avisos) antes de importar.
+
+Testes do motor cobrem:
+
+- AFD 1510 (PIS);
+- AFD 671 tipo 3 (CPF);
+- AFD 671 tipo 7 (REP-P).
+
+Leiautes de referência no repositório: `afd_leiaute.pdf`, `afd_texto.txt`,
+`leiaute-do-arquivo-eletronico-de-jornada-aej.pdf` e `aej_texto.txt`.

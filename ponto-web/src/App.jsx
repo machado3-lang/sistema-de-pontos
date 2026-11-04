@@ -11,7 +11,7 @@ import {
   X
 } from 'lucide-react';
 
-import { parseAFD, parseAFDLinhas, parseMinutosToHHMM } from './PontoEngine';
+import { parseAFD, parseAFDLinhas, parseMinutosToHHMM, validarAFD } from './PontoEngine';
 import CadastrosTab from './CadastrosTab';
 import ApuracaoTab from './ApuracaoTab';
 import RelatoriosTab from './RelatoriosTab';
@@ -46,6 +46,7 @@ function DashboardLayout({ onLogout, usuario }) {
 
       setTimeout(async () => {
         const resultado = parseAFD(conteudo);
+        const validacao = validarAFD(conteudo);
         setPontoData(resultado);
         setIsUploading(false);
 
@@ -108,7 +109,8 @@ function DashboardLayout({ onLogout, usuario }) {
           total: resultado.totalBatidas,
           importadas: matched.length,
           descartadas: unmatched.length,
-          funcNaoCadastrados: unmatchedDocs.size
+          funcNaoCadastrados: unmatchedDocs.size,
+          validacao,
         });
       }, 500);
     };
@@ -234,6 +236,26 @@ function DashboardLayout({ onLogout, usuario }) {
                     <div style={{ fontWeight: 600, color: importResult.descartadas > 0 ? 'var(--danger)' : 'var(--success)' }}>{importResult.descartadas} batidas{importResult.funcNaoCadastrados > 0 && ` (${importResult.funcNaoCadastrados} func. não cadastrados)`}</div>
                   </div>
                 </div>
+
+                {importResult.validacao && (
+                  <div style={{ marginTop: '0.75rem', paddingTop: '0.5rem', borderTop: '1px solid var(--glass-border)', fontSize: '0.8rem' }}>
+                    <div style={{ color: 'var(--text-muted)' }}>
+                      Portaria {importResult.validacao.resumo.portaria}
+                      {importResult.validacao.resumo.versao ? ` · versão ${importResult.validacao.resumo.versao}` : ''}
+                      {' · '}{importResult.validacao.resumo.marcacoes} marcações
+                      {' '}(tipo 3: {importResult.validacao.resumo.tipo3}, tipo 7: {importResult.validacao.resumo.tipo7})
+                      {importResult.validacao.resumo.periodo
+                        ? ` · ${importResult.validacao.resumo.periodo.inicio} a ${importResult.validacao.resumo.periodo.fim}`
+                        : ''}
+                    </div>
+                    {importResult.validacao.erros.map((erro, i) => (
+                      <div key={`ve${i}`} style={{ color: 'var(--danger)' }}>Erro: {erro}</div>
+                    ))}
+                    {importResult.validacao.avisos.map((aviso, i) => (
+                      <div key={`va${i}`} style={{ color: 'var(--warning, #f59e0b)' }}>Aviso: {aviso}</div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

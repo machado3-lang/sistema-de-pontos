@@ -3,5 +3,5 @@
  * Este arquivo mantém a API antiga usada pelo Dashboard.
  */
 
-export { parseAFD, parseAFDLinhas } from './engine/afd.js';
+export { parseAFD, parseAFDLinhas, validarAFD } from './engine/afd.js';
 export { formatMinutes as parseMinutosToHHMM } from './engine/time.js';

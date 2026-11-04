@@ -106,11 +106,14 @@ const periodoBanco = E.calcularPeriodo({
 check('banco saldo 600', Math.round(periodoBanco.banco.saldoFinal) === 600, periodoBanco.banco.saldoFinal);
 
 const afd1510 = '000000001' + '3' + '30' + '10' + '2026' + '08' + '00' + '000123456789';
-const afd671 = '000000002' + '3' + '2026-10-30T08:00:00' + '     ' + '12345678901';
+const afd671 = '000000002' + '3' + '2026-10-30T08:00:00-0300' + '012345678901';
+const afdRepP = '000000003' + '7' + '2026-10-30T09:00:00-0300' + '012345678901' + '2026-10-30T09:00:01-0300' + '04' + '0' + 'a'.repeat(64);
 const p1510 = E.parseAFD(afd1510);
 const p671 = E.parseAFD(afd671);
+const pRepP = E.parseAFD(afdRepP);
 check('AFD 1510 documento', Object.keys(p1510.dados)[0] === '00123456789', Object.keys(p1510.dados));
 check('AFD 671 documento', Object.keys(p671.dados)[0] === '12345678901', Object.keys(p671.dados));
+check('AFD REP-P tipo 7 documento', Object.keys(pRepP.dados)[0] === '12345678901', Object.keys(pRepP.dados));
 check('AFD total batidas', p1510.totalBatidas === 1 && p671.totalBatidas === 1, `${p1510.totalBatidas}/${p671.totalBatidas}`);
 
 const diaSabadoFolga = E.calcularDia({
