@@ -53,6 +53,27 @@ export function parseAFDLinhas(conteudo) {
     const linha = String(bruta || '').replace(/\s+$/, '');
     if (linha.length < 10) continue;
 
+    // Trailer do AFD (1510 e 671): "999999999" + contadores + "9".
+    // O tipo "9" fica na última posição do registro, não na 10ª.
+    const pareceTrailer = linha.startsWith('999999999')
+      && (linha.length === 46 || linha.length === 64)
+      && linha[linha.length - 1] === '9';
+    if (pareceTrailer) {
+      const is671Trailer = linha.length === 64;
+      trailer = {
+        nsr: '999999999',
+        registros: {
+          2: Number(linha.substring(9, 18)) || 0,
+          3: Number(linha.substring(18, 27)) || 0,
+          4: Number(linha.substring(27, 36)) || 0,
+          5: Number(linha.substring(36, 45)) || 0,
+          6: is671Trailer ? Number(linha.substring(45, 54)) || 0 : 0,
+          7: is671Trailer ? Number(linha.substring(54, 63)) || 0 : 0,
+        },
+      };
+      continue;
+    }
+
     const nsrTexto = linha.substring(0, 9).trim();
     const nsr = Number(nsrTexto);
     const tipo = linha[9];
@@ -63,15 +84,29 @@ export function parseAFDLinhas(conteudo) {
     }
 
     if (tipo === '1') {
-      cabecalho = {
-        nsr: nsrTexto,
-        tpIdtEmpregador: linha[10] || '',
-        idtEmpregador: soDigitos(linha.substring(11, 25)),
-        razaoSocial: linha.substring(39, 189).trim(),
-        dataInicio: normalizarData(linha.substring(206, 216)),
-        dataFim: normalizarData(linha.substring(216, 226)),
-        versao: linha.substring(250, 253).trim(),
-      };
+      const is671Header = linha.length >= 250
+        && /^\d{4}-\d{2}-\d{2}$/.test(linha.substring(206, 216));
+      cabecalho = is671Header
+        ? {
+          nsr: nsrTexto,
+          tpIdtEmpregador: linha[10] || '',
+          idtEmpregador: soDigitos(linha.substring(11, 25)),
+          razaoSocial: linha.substring(39, 189).trim(),
+          dataInicio: normalizarData(linha.substring(206, 216)),
+          dataFim: normalizarData(linha.substring(216, 226)),
+          versao: linha.substring(250, 253).trim(),
+          portaria: '671',
+        }
+        : {
+          nsr: nsrTexto,
+          tpIdtEmpregador: linha[10] || '',
+          idtEmpregador: soDigitos(linha.substring(11, 25)),
+          razaoSocial: linha.substring(37, 187).trim(),
+          dataInicio: normalizarData(linha.substring(187, 195)),
+          dataFim: normalizarData(linha.substring(195, 203)),
+          versao: '',
+          portaria: '1510',
+        };
       continue;
     }
 
@@ -135,13 +170,21 @@ export function parseAFDLinhas(conteudo) {
     }
 
     if (tipo === '5') {
-      const cpf = documento(linha.substring(35, 47));
+      const is671Emp = linha.length >= 99 && ['I', 'A', 'E'].includes(linha[34]);
+      const operacao = is671Emp ? (linha[34] || '') : (linha[22] || '');
+      const cpf = is671Emp
+        ? documento(linha.substring(35, 47))
+        : documento(linha.substring(23, 35));
+      const nome = is671Emp
+        ? linha.substring(47, 99).trim()
+        : linha.substring(35, 87).trim();
       if (!cpf) continue;
       funcionarios.push({
         nsr: nsrTexto,
-        operacao: linha[34] || '',
+        operacao,
         cpf,
-        nome: linha.substring(47, 99).trim(),
+        nome,
+        portaria: is671Emp ? '671' : '1510',
       });
       continue;
     }
@@ -275,7 +318,8 @@ export function validarAFD(conteudo) {
     erros,
     avisos,
     resumo: {
-      portaria: info.linhas[0]?.portaria || (info.cabecalho?.versao === '004' ? '671' : '1510'),
+      portaria: info.linhas[0]?.portaria || info.cabecalho?.portaria
+        || (info.cabecalho?.versao === '004' ? '671' : '1510'),
       versao: info.cabecalho?.versao || '',
       empregador: info.cabecalho?.razaoSocial || '',
       documentoEmpregador: info.cabecalho?.idtEmpregador || '',

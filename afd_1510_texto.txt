@@ -1,0 +1,348 @@
+Anexo I - Leiaute dos arquivos 
+ 
+ 
+1. Arquivo-Fonte de Dados – AFD 
+Este arquivo é composto dos seguintes tipos de registro: 
+1.1. Registro tipo “1” - Cabeçalho 
+Referência do 
+campo Posição Tamanho Tipo Conteúdo 
+1 001-009 9 numérico “000000000”. 
+2 010-010 1 numérico Tipo do registro, “1”. 
+3 011-011 1 numérico Tipo de identificador do empregador, “1” para CNPJ ou “2” para CPF. 
+4 012-025 14 numérico CNPJ ou CPF do empregador. 
+5 026-037 12 numérico CEI do empregador, quando existir. 
+6 038-187 150  alfanumérico Razão social ou nome do empregador. 
+7 188-204 17 numérico Número de fabricação do REP. 
+8 205-212 8 numérico Data inicial dos registros no arquivo, no formato “ddmmaaaa”. 
+9 213-220 8 numérico Data final dos registros no arquivo, no formato “ddmmaaaa”. 
+10 221-228 8 numérico Data de geração do arquivo, no formato “ddmmaaaa”. 
+11 229-232 4 numérico Horário da geração do arquivo, no formato “hhmm”. 
+ 
+1.2. Registro de inclusão ou alteração da identificação da empresa no REP 
+Referência do 
+campo Posição Tamanho Tipo Conteúdo 
+1 001-009 9 numérico NSR. 
+2 010-010 1 numérico Tipo do registro, “2”. 
+3 011-018 8 numérico Data da gravação, no formata “ddmmaaaa”. 
+4 019-022 4 numérico Horário da gravação, no formato “hhmm” 
+5 023-023 1 numérico Tipo de identificador do empregador, “1” para CNPJ ou “2” para CPF. 
+6 024-037 14 numérico CNPJ ou CPF do empregador. 
+7 038-049 12 numérico CEI do empregador, quando existir. 
+8 050-199 150 alfanumérico Razão social ou nome do empregador. 
+9 200-299 100 alfanumérico Local de prestação de serviços. 
+ 
+1.3. Registro de marcação de ponto 
+Referência do 
+campo Posição Tamanho Tipo Conteúdo 
+1 001-009 9 numérico NSR. 
+2 010-010 1 alfanumérico tipo do registro, “3”. 
+4 011-018 8 numérico Data da marcação de ponto, no formato “ddmmaaaa”. 
+5 019-022 4 alfanumérico Horário da marcação de ponto, no Formato “hhmm”. 
+6 023-034 12 numérico Número do PIS do empregado. 
+ 
+1.4. Registro de ajuste do relógio de tempo real do REP 
+Referência do 
+campo Posição Tamanho Tipo Conteúdo 
+1 001-009 9 numérico NSR. 
+2 010-010 1 numérico Tipo do registro, “4”. 
+4 011-018 8 numérico Data antes do ajuste, no formato “ddmmaaaa”. 
+5 019-022 4 numérico Horário antes do ajuste, no formato “hhmm”. 
+6 023-030 8 numérico Data ajustada, no formato “ddmmaaaa”. 
+7 031-034 4 numérico Horário ajustado, no formato “hhmm”. 
+ 
+1.5. Registro de inclusão ou alteração ou exclusão de empregado da MT do REP 
+Referência do 
+campo Posição Tamanho Tipo Conteúdo 
+1 001-009 9 numérico NSR. 
+2 010-010 1 numérico Tipo do registro, “5”. 
+4 011-018 8 numérico Data da gravação do registro, no formato “ddmmaaaa”. 
+5 019-022 4 numérico Horário da gravação do registro, no formato “hhmm”. 
+6 023-023 1 alfanumérico Tipo de operação, “I” para inclusão, “A” para alteração e “E” para exclusão. 
+7 024-035 12 numérico Número do PIS do empregado. 
+8 036-087 52 alfanumérico Nome do empregado. 
+ 
+1.6. Trailer 
+Referência do 
+campo Posição Tamanho Tipo Conteúdo 
+1 001-009 9 numérico “999999999”. 
+2 010-018 9 numérico Quantidade de registros tipo “2” no arquivo. 
+3 019-027 9 numérico Quantidade de registros tipo “3” no arquivo. 
+4 028-036 9 numérico Quantidade de registros tipo “4” no arquivo. 
+5 037-045 9 numérico Quantidade de registros tipo “5” no arquivo. 
+6 046-046 1 numérico Tipo do registro, “9”. 
+ 
+2. Arquivo-Fonte de Dados Tratado – AFDT 
+Este arquivo é composto dos seguintes tipos de registro: 
+2.1. Registro tipo “1” – Cabeçalho 
+Referência do 
+campo Posição Tamanho Tipo Conteúdo 
+1 001-009 9 numérico Seqüencial do registro no arquivo. 
+2 010-010 1 numérico Tipo do registro, “1”. 
+3 011-011 1 numérico Tipo de identificador do empregador, “1” para CNPJ ou “2” para CPF. 
+4 012-025 14 numérico CNPJ ou CPF do empregador. 
+5 026-037 12 numérico CEI do empregador, quando existir. 
+6 038-187 150 alfanumérico Razão social ou nome do empregador. 
+7 188-195 8 numérico Data inicial dos registros no arquivo, no formato “ddmmaaaa”. 
+8 196-203 8 numérico Data final dos registros no arquivo, no formato “ddmmaaaa”. 
+9 204-211 8 numérico Data de geração do arquivo, no formato “ddmmaaaa”. 
+10 212-215 4 numérico Horário da geração do arquivo, no formato “hhmm”. 
+ 
+2.2. Registros do tipo DETALHE: 
+Referência do 
+campo Posição Tamanho Tipo Conteúdo 
+1 001-009 9 numérico Seqüencial do registro no arquivo. 
+2 010-010 1 numérico Tipo do registro, “2”. 
+3 011-018 8 numérico Data da marcação do ponto, no formato “ddmmaaaa”. 
+4 019-022 4 numérico Horário da marcação do ponto, no formato “hhmm”. 
+5 023-034 12 numérico Número do PIS do empregado. 
+6 035-051 17 numérico Número de fabricação do REP onde foi feito o registro. 
+7 052-052 1 alfanumérico 
+Tipo de marcação, “E” para ENTRADA, 
+“S” para SAÍDA ou “D” para registro a 
+ser DESCONSIDERADO. 
+8 053-054 2 numérico 
+Número seqüencial por empregado e 
+jornada para o conjunto Entrada/Saída. 
+Vide observação. 
+9 055-055 1 alfanumérico 
+Tipo de registro: “O” para registro 
+eletrônico ORIGINAL, “I” para registro 
+INCLUÍDO por digitação, “P” para 
+intervalo PRÉ-ASSINALADO. 
+10 056-155 100 alfanumérico Motivo: Campo a ser preenchido se o campo 7 for “D” ou se o campo 9 for “I”. 
+ 
+a. Todos os registros de marcação (tipo “3”) contidos em AFD devem estar em AFDT.  
+b. Se uma marcação for feita incorretamente de forma que deva ser desconsiderada, esse registro 
+deverá ter o campo 7 assinalado com “D” e o campo 10 deve ser preenchido com o motivo.  
+c. Se alguma marcação deixar de ser realizada, o registro incluído deverá ter o campo 9  assinalado 
+com “I”, neste caso também deverá ser preenchido o campo 10 com o motivo; 
+d. A todo registro com o campo 7 assinalado com “E” para um determinado empregado e jornada 
+deve existir obrigatoriamente outro registro assinalado com “S”, do mesmo empregado e na 
+mesma jornada, contendo ambos o mesmo “número sequencial de tipo de marcação” no campo 
+8. 
+e. Para cada par de registros Entrada/Saída (E/S) de cada empregado em uma jornada deve ser 
+atribuído um número seqüencial, no campo 8, de forma que se tenha nos campos 7 e 8 desses 
+registros os conteúdos “E1”/”S1”, “E2”/”S2”, “E3”/”S3” e assim sucessivamente até o último par 
+“E”/”S” da jornada. 
+f. O arquivo gerado deve conter todos os registros referentes às jornadas que se iniciam na “data 
+inicial” e que se completem até a “data final”, respectivamente campos 7 e 8 do registro tipo “1”, 
+cabeçalho. 
+   
+2.3. Trailer 
+Referência do 
+campo Posição Tamanho Tipo Conteúdo 
+1 001-009 9 numérico Seqüencial do registro no arquivo. 
+2 010-010 1 numérico Tipo do registro, “9”. 
+ 
+3. Arquivo de Controle de Jornada para Efeitos Fiscais– ACJEF 
+Este arquivo é composto dos seguintes tipos de registro: 
+3.1. Registro tipo “1” – Cabeçalho 
+Referência do 
+campo Posição Tamanho Tipo Conteúdo 
+1 001-009 9 numérico Seqüencial do registro no arquivo. 
+2 010-010 1 numérico Tipo do registro, “1”. 
+3 011-011 1 numérico Tipo de identificador do empregador, “1” para CNPJ ou “2” para CPF. 
+4 012-025 14 numérico CNPJ ou CPF do empregador. 
+5 026-037 12 numérico CEI do empregador, quando existir. 
+6 038-187 150 alfanumérico Razão social ou nome do empregador. 
+7 188-195 8 numérico Data inicial dos registros no arquivo, no formato “ddmmaaaa”. 
+8 196-203 8 numérico Data final dos registros no arquivo, no formato “ddmmaaaa”. 
+8 204-211 8 numérico Data de geração do arquivo, no formato “ddmmaaaa”. 
+9 212-215 4 numérico Horário da geração do arquivo, no formato “hhmm”. 
+ 
+3.2. Horários Contratuais 
+Referência do 
+campo Posição Tamanho Tipo Conteúdo 
+1 001-009 9 numérico Seqüencial do registro no arquivo. 
+2 010-010 1 numérico Tipo do registro, “2”. 
+3 011-014 4 numérico Código do Horário (CH), no formato “nnnn”. 
+4 015-018 4 numérico Entrada, no formato “hhmm”. 
+5 019-022 4 numérico Início intervalo, no formato “hhmm”. 
+6 023-026 4 numérico Fim intervalo, no formato “hhmm”. 
+7 027-030 4 numérico Saída, no formato “hhmm”. 
+a. Nestes registros estarão listados todos os horários contratuais praticados pelos 
+empregados. Cada horário será único e identificado por um código numérico iniciando 
+por “0001”, campo 3. 
+3.3. Detalhe 
+Referência 
+do campo Posição Tamanho Tipo Conteúdo 
+1 001-009 9 numérico Seqüencial do registro no arquivo. 
+2 010-010 1 numérico Tipo do registro, “3”. 
+3 011-022 12 numérico Número do PIS do empregado. 
+4 023-030 8 numérico Data de início da jornada, no formato “ddmmaaaa”. 
+5 031-034 4 numérico Primeiro horário de entrada da jornada, no formato “hhmm”. 
+6 035-038 4 numérico Código do horário (CH) previsto para a jornada, no formato “nnnn”. 
+7 039-042 4 numérico Horas diurnas não extraordinárias, no formato “hhmm”. 
+8 043-046 4 numérico Horas noturnas não extraordinárias, no formato “hhmm”. 
+9 047-050 4 numérico Horas extras 1, no formato “hhmm”. 
+10 051-054 4 numérico 
+Percentual do adicional de horas 
+extras 1, onde as 2 primeiras 
+posições indicam a parte inteira e as 
+2 seguintes a fração decimal. 
+11 055-055 1 alfanumérico 
+Modalidade da hora extra 1, 
+assinalado com “D” se as horas 
+extras forem diurnas e “N” se forem 
+noturnas. 
+12 056-059 4 numérico Horas extras 2, no formato “hhmm”. 
+13 060-063 4 numérico 
+Percentual do adicional de horas 
+extras 2, onde as 2 primeiras 
+posições indicam a parte inteira e as 
+2 seguintes a fração decimal. 
+14 064-064 1 alfanumérico 
+Modalidade da hora extra 2, 
+assinalado com “D” se as horas 
+extras forem diurnas e “N” se forem 
+noturnas. 
+15 065-068 4 numérico Horas extras 3, no formato “hhmm”. 
+16 069-072 4 numérico 
+Percentual do adicional de horas 
+extras 3, onde as 2 primeiras 
+posições indicam a parte inteira e as 
+2 seguintes a fração decimal. 
+17 073-073 1 alfanumérico 
+Modalidade da hora extra 3, 
+assinalado com “D” se as horas 
+extras forem diurnas e “N” se forem 
+noturnas. 
+18 074-077 4 numérico Horas extras 4, no formato “hhmm”. 
+19 078-081 4 numérico 
+Percentual do adicional de horas 
+extras 4, onde as 2 primeiras 
+posições indicam a parte inteira e as 
+2 seguintes a fração decimal. 
+20 082-082 1 alfanumérico 
+Modalidade da hora extra 4, 
+assinalado com “D” se as horas 
+extras forem diurnas e “N” se forem 
+noturnas. 
+21 083-086 4 numérico Horas de faltas e/ou atrasos. 
+22 087-087 1 numérico 
+Sinal de horas para compensar. “1” 
+se for horas a maior e “2” se for 
+horas a menor.  
+23 088-091 4 numérico Saldo de horas para compensar no formato “hhnn”.  
+a. Cada registro se refere a uma jornada completa. 
+b. Existem 4 conjuntos de campos HORAS EXTRAS/PERCENTUAL DO ADICIONAL/MODALIDADE 
+DA HORA EXTRA para serem utilizados nas situações em que haja previsão em 
+acordo/convenção de percentuais diferentes para uma mesma prorrogação (exemplo: até as 
+20:00 adicional de 50%,  à partir das 20:00 adicional de 80%).  
+c. Caso existam horas extras efetuadas, parte na modalidade diurna e parte na modalidade noturna, 
+cada período deve ser assinalado separadamente. 
+d. No campo 23, “Saldo de horas para compensar”, a quantidade de horas noturnas deve ser 
+assinalada com a redução prevista no § 1º do art. 73 da CLT. 
+3.4. Trailer 
+Referência do 
+campo Posição Tamanho Tipo Conteúdo 
+1 001-009 9 numérico Seqüencial do registro no arquivo.. 
+2 010-010 1 numérico Tipo do registro, “9”. 
+Anexo II - Modelo do relatório Espelho de Ponto 
+ 
+ 
+Relatório Espelho de Ponto Eletrônico 
+ 
+Empregador: (identificador e nome) 
+ 
+Endereço: (endereço do local de prestação de serviço) 
+ 
+Empregado: (número do PIS e nome) 
+ 
+Admissão: (data de admissão do empregado) 
+ 
+Relatório emitido em: (data de emissão do relatório) 
+ 
+Horários contratuais do empregado: 
+Código de Horário (CH) Entrada Saída Entrada Saída 
+nnnnn hh:mm hh:mm hh:mm hh:mm 
+nnnnn hh:mm hh:mm hh:mm hh:mm 
+nnnnn hh:mm hh:mm hh:mm hh:mm 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+ 
+Período: (data inicial e data final de apuração da folha de pagamento) 
+Jornada realizada Tratamentos efetuados sobre os dados originais Dia Marcações registradas no ponto eletrônico Entrada Saída Entrada Saída Entrada Saída CH Horário Ocor. Motivo 
+dd hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm nnnnn hh:mm I/D/P  
+hh:mm I/D/P  
+hh:mm I/D/P  
+dd hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm nnnnn … 
+… 
+… 
+… 
+… 
+… 
+… 
+… 
+… 
+dd hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm nnnnn hh:mm I/D/P  
+dd hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm nnnnn hh:mm I/D/P  
+dd hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm nnnnn hh:mm I/D/P  
+dd hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm nnnnn hh:mm I/D/P  
+dd hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm nnnnn hh:mm I/D/P  
+dd hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm hh:mm nnnnn hh:mm I/D/P  
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+... 
+a. Preencher a coluna “Dia” com a data em que foram marcados os horários. 
+b. Preencher a coluna “Marcações registradas no ponto eletrônico” com todos os horários existentes no arquivo original na linha 
+relativa à data em que foi efetuada a marcação. 
+c. Na coluna “Jornada Realizada”, preencher com os horários tratados (originais, incluídos ou pré-assinalados), observando sempre o 
+par “Entrada/Saída”. Quando uma jornada de trabalho iniciar em um dia e terminar no dia seguinte, utilizar duas linhas para a 
+mesma jornada. Para a entrada da jornada seguinte, utilizar outra linha, mesmo que ocorra na mesma data. Neste caso a data será 
+repetida. 
+d. Preencher a coluna “CH” com o código do horário contratual. 
+e. Na coluna “Tratamentos efetuados sobre os dados originais”, preencher o campo “Horário” com o horário tratado e o campo “Ocor.” 
+(ocorrência) com “D” quando o horário for desconsiderado, “I” quando o horário for incluído e “P” quando houver a pré-assinalação 
+do período de repouso. O campo “Motivo” deve ser preenchido com um texto que expresse a motivação da inclusão ou 
+desconsideração de cada horário marcado com ocorrência “I” ou “D”. Não preencher o campo “Motivo” quando o campo 
+“Ocorrência” for preenchido com “P”.  DOU 25/08/2009 – Seção I 
+ 
+ 
+ 

@@ -846,6 +846,27 @@ Leiautes de referência no repositório: `afd_leiaute.pdf`, `afd_texto.txt`,
 
 ---
 
+## 24. AFD — correções de leiaute (04/11/2026)
+
+Ao conferir os leiautes oficiais (AFD 1510 e 671), o trailer estava sendo
+ignorado: nos dois casos o tipo "9" fica na última posição do registro
+("999999999" + contadores + "9"), e não na 10ª posição.
+
+Corrigido em `ponto-web/src/engine/afd.js`:
+
+- trailer AFD 1510 (46 caracteres) e 671 (64 caracteres), com os contadores
+  por tipo;
+- cabeçalho 1510 (razão social nas posições 38-187 e datas ddmmaaaa);
+- tipo 5 (empregado) 1510 x 671 (PIS/CPF, operação e nome).
+
+`validarAFD` agora reconhece o trailer e não emite mais o aviso falso de
+"Trailer não encontrado". Os testes do motor incluem cabeçalho + empregado +
+marcação + trailer completos nos dois leiautes.
+
+Referência: `afd_texto.txt` (671) e `afd_1510_texto.txt` (1510).
+
+---
+
 ## 23. Justificativas aplicadas no motor (04/11/2026)
 
 Os lançamentos de justificativa passaram a afetar o cálculo do dia, não são

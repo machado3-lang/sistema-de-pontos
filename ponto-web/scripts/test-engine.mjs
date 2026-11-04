@@ -190,6 +190,33 @@ check('AFD 671 documento', Object.keys(p671.dados)[0] === '12345678901', Object.
 check('AFD REP-P tipo 7 documento', Object.keys(pRepP.dados)[0] === '12345678901', Object.keys(pRepP.dados));
 check('AFD total batidas', p1510.totalBatidas === 1 && p671.totalBatidas === 1, `${p1510.totalBatidas}/${p671.totalBatidas}`);
 
+const pad = (s, n) => String(s ?? '').padEnd(n, ' ');
+const h1510 = '000000001' + '1' + '1' + '11111111000199'.padEnd(14)
+  + '0'.repeat(12) + pad('EMPRESA 1510', 150) + '01102026' + '30102026' + '04112026';
+const emp1510 = '000000002' + '5' + '30102026' + '0800' + 'I' + '000123456789'
+  + pad('FUNCIONARIO TESTE', 52);
+const m1510 = '000000003' + '3' + '30102026' + '0800' + '000123456789';
+const t1510 = '999999999' + '000000000' + '000000001' + '000000000' + '000000000' + '9';
+const v1510 = E.validarAFD([h1510, emp1510, m1510, t1510].join('\r\n'));
+check('AFD 1510 portaria', v1510.resumo.portaria === '1510', v1510.resumo.portaria);
+check('AFD 1510 trailer reconhecido', v1510.resumo.marcacoes === 1, v1510.resumo.marcacoes);
+check('AFD 1510 sem avisos', v1510.avisos.length === 0, v1510.avisos);
+check('AFD 1510 empregado 1510', v1510.resumo.funcionariosCadastradosNoRep === 1, v1510.resumo.funcionariosCadastradosNoRep);
+const info1510 = E.parseAFDLinhas([h1510, emp1510, m1510, t1510].join('\r\n'));
+check('AFD 1510 nome do empregado', info1510.funcionarios[0]?.nome === 'FUNCIONARIO TESTE', info1510.funcionarios[0]?.nome);
+
+const h671 = '000000001' + '1' + '1' + pad('11111111000199', 14) + pad('', 14)
+  + pad('EMPRESA 671', 150) + pad('', 17) + '2026-10-01' + '2026-10-31'
+  + pad('2026-11-04T10:00:00-0300', 24) + '004' + '1' + pad('11111111000199', 14)
+  + pad('MODELO', 30) + '0000';
+const m671 = '000000002' + '3' + '2026-10-30T08:00:00-0300' + '012345678901' + '0000';
+const t671 = '999999999' + '000000000' + '000000001' + '000000000' + '000000000'
+  + '000000000' + '000000000' + '9';
+const v671 = E.validarAFD([h671, m671, t671].join('\r\n'));
+check('AFD 671 portaria no cabecalho', v671.resumo.portaria === '671', v671.resumo.portaria);
+check('AFD 671 trailer reconhecido', v671.resumo.marcacoes === 1, v671.resumo.marcacoes);
+check('AFD 671 sem avisos', v671.avisos.length === 0, v671.avisos);
+
 const diaSabadoFolga = E.calcularDia({
   data: '2026-10-31', funcionario: {}, horario, params,
   marcacoes: [{ hora: '08:00' }, { hora: '12:00' }],
