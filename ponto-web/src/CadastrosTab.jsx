@@ -41,7 +41,7 @@ export default function CadastrosTab({ usuario }) {
     nome: '', cpf: '', pis: '', senha: '', matricula: '', folha: '', foto: '',
     empresa_id: '', data_admissao: '', departamento: '', cargo: '', horario_id: '',
     parametro_id: '', data_inicio: '', ativo: true, data_demissao: '', motivo_demissao: '',
-    cidade: '', uf: ''
+    cidade: '', uf: '', cidade_ibge: ''
   });
 
   const normalizarFuncionario = (f) => {
@@ -84,7 +84,7 @@ export default function CadastrosTab({ usuario }) {
   useEffect(() => { carregarDadosBase(); }, []);
 
   const resetForm = () => {
-    setForm({ nome: '', cpf: '', pis: '', senha: '', matricula: '', folha: '', foto: '', empresa_id: '', data_admissao: '', departamento: '', cargo: '', horario_id: '', parametro_id: '', data_inicio: '', ativo: true, data_demissao: '', motivo_demissao: '', cidade: '', uf: '' });
+    setForm({ nome: '', cpf: '', pis: '', senha: '', matricula: '', folha: '', foto: '', empresa_id: '', data_admissao: '', departamento: '', cargo: '', horario_id: '', parametro_id: '', data_inicio: '', ativo: true, data_demissao: '', motivo_demissao: '', cidade: '', uf: '', cidade_ibge: '' });
     setEditandoId(null);
     setHistHorarios([]);
   };
@@ -104,6 +104,7 @@ export default function CadastrosTab({ usuario }) {
       ativo: form.ativo !== false,
       cidade: form.cidade || null,
       uf: form.uf || null,
+      cidade_ibge: form.cidade_ibge || null,
       departamento_id: isUUID(form.departamento) ? form.departamento : null,
       cargo_id: isUUID(form.cargo) ? form.cargo : null,
       horario_id: isUUID(form.horario_id) ? form.horario_id : null,
@@ -134,7 +135,7 @@ export default function CadastrosTab({ usuario }) {
   };
 
   const handleEditarFuncionario = async (func) => {
-    setForm({ nome: func.nome || '', cpf: func.cpf || '', pis: func.pis || '', senha: '', matricula: func.matricula || '', folha: func.folha || '', foto: func.foto || '', empresa_id: func.empresa_id || '', data_admissao: func.data_admissao || '', departamento: func.departamento || '', cargo: func.cargo || '', horario_id: func.horario_id || '', parametro_id: func.parametro_id || '', data_inicio: func.data_inicio || '', ativo: func.ativo !== false, data_demissao: func.data_demissao || '', motivo_demissao: func.motivo_demissao || '', cidade: func.cidade || '', uf: func.uf || '' });
+    setForm({ nome: func.nome || '', cpf: func.cpf || '', pis: func.pis || '', senha: '', matricula: func.matricula || '', folha: func.folha || '', foto: func.foto || '', empresa_id: func.empresa_id || '', data_admissao: func.data_admissao || '', departamento: func.departamento || '', cargo: func.cargo || '', horario_id: func.horario_id || '', parametro_id: func.parametro_id || '', data_inicio: func.data_inicio || '', ativo: func.ativo !== false, data_demissao: func.data_demissao || '', motivo_demissao: func.motivo_demissao || '', cidade: func.cidade || '', uf: func.uf || '', cidade_ibge: func.cidade_ibge || '' });
     setEditandoId(func.id);
     setSubTab('editar_func');
     try {

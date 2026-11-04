@@ -297,9 +297,7 @@ export async function carregarFeriados() {
     data: String(r.data).slice(0, 10),
     tipo: r.tipo || 'municipal',
     recorrente: Boolean(r.recorrente),
-    uf: r.uf || '',
-    cidade: r.cidade || '',
-    alvo_empresa_id: r.alvo_empresa_id || '',
+    aplicacoes: Array.isArray(r.aplicacoes) ? r.aplicacoes : [],
   }));
   gravarCache('feriados', lista);
   return lista;
@@ -311,9 +309,9 @@ function feriadoParaBanco(dados) {
     data: dados.data,
     tipo: dados.tipo || 'municipal',
     recorrente: Boolean(dados.recorrente),
-    uf: dados.uf || null,
-    cidade: dados.cidade || null,
-    alvo_empresa_id: dados.alvo_empresa_id || null,
+    aplicacoes: (dados.aplicacoes || [])
+      .filter((a) => a && a.tipo && a.valor)
+      .map((a) => ({ tipo: a.tipo, valor: String(a.valor), rotulo: a.rotulo || null })),
   };
 }
 
@@ -341,32 +339,46 @@ export function feriadosParaEngine(feriados = []) {
 
 /**
  * Feriados que se aplicam a um funcionário, considerando:
- * - tipo (nacional/estadual/municipal/empresa);
- * - cidade/UF do funcionário;
- * - empresa do feriado;
+ * - aplicações combináveis (empresa, UF, cidade/IBGE, departamento, horário, funcionário);
  * - flag "feriado como dia normal" do horário.
+ *
+ * Dimensões diferentes são AND; valores da mesma dimensão são OR.
  */
 export function feriadosParaFuncionario(feriados = [], funcionario = {}, horario = null) {
   if (horario?.considerar_feriado_dia_normal) return [];
 
-  const ufFunc = String(funcionario?.uf || '').toUpperCase();
-  const cidadeFunc = String(funcionario?.cidade || '').trim().toLowerCase();
-  const empresaFunc = String(funcionario?.empresa_id || '');
+  const uf = String(funcionario?.uf || '').toUpperCase();
+  const cidade = String(funcionario?.cidade || '').trim().toLowerCase();
+  const cidadeIbge = String(funcionario?.cidade_ibge || '');
+  const empresa = String(funcionario?.empresa_id || '');
+  const funcionarioId = String(funcionario?.id || '');
+  const departamentoId = String(funcionario?.departamento_id || '');
+  const horarioId = String(funcionario?.horario_id || horario?.id || '');
+
+  function combina(a) {
+    const valor = String(a.valor || '');
+    if (a.tipo === 'empresa') return valor === empresa;
+    if (a.tipo === 'uf') return valor.toUpperCase() === uf;
+    if (a.tipo === 'cidade') {
+      return (cidadeIbge && valor === cidadeIbge) || valor.trim().toLowerCase() === cidade;
+    }
+    if (a.tipo === 'funcionario') return valor === funcionarioId;
+    if (a.tipo === 'departamento') return valor === departamentoId;
+    if (a.tipo === 'horario') return valor === horarioId;
+    return false;
+  }
 
   return (feriados || [])
     .filter((f) => {
-      if (f.tipo === 'nacional') return true;
-      if (f.tipo === 'estadual') {
-        return Boolean(f.uf) && String(f.uf).toUpperCase() === ufFunc;
+      const apps = Array.isArray(f.aplicacoes) ? f.aplicacoes : [];
+      if (apps.length === 0) return true;
+
+      const porTipo = {};
+      for (const a of apps) {
+        if (!porTipo[a.tipo]) porTipo[a.tipo] = [];
+        porTipo[a.tipo].push(a);
       }
-      if (f.tipo === 'municipal') {
-        return Boolean(f.uf) && String(f.uf).toUpperCase() === ufFunc
-          && Boolean(f.cidade) && String(f.cidade).trim().toLowerCase() === cidadeFunc;
-      }
-      if (f.tipo === 'empresa') {
-        return Boolean(f.alvo_empresa_id) && String(f.alvo_empresa_id) === empresaFunc;
-      }
-      return false;
+      return Object.values(porTipo).every((lista) => lista.some(combina));
     })
     .map((f) => (f.recorrente ? String(f.data).slice(5) : String(f.data).slice(0, 10)));
 }

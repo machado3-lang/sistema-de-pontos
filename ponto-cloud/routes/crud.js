@@ -472,6 +472,7 @@ function funcionariosRouter() {
         foto: body.foto || null,
         cidade: body.cidade || null,
         uf: body.uf || null,
+        cidade_ibge: body.cidade_ibge || null,
         data_admissao: body.data_admissao || null,
         data_demissao: body.data_demissao || null,
         motivo_demissao: body.motivo_demissao || null,
@@ -504,7 +505,7 @@ function funcionariosRouter() {
       const data = {};
 
       const simples = [
-        'nome', 'matricula', 'folha', 'foto', 'cidade', 'uf', 'data_admissao', 'data_demissao',
+        'nome', 'matricula', 'folha', 'foto', 'cidade', 'uf', 'cidade_ibge', 'data_admissao', 'data_demissao',
         'motivo_demissao', 'departamento_id', 'cargo_id', 'horario_id',
         'parametro_id', 'data_inicio', 'ativo',
       ];
@@ -1080,6 +1081,157 @@ function bancoAjustesRouter() {
   return router;
 }
 
+// ── Feriados (com aplicações combináveis) ───────────────────────────────────
+
+function feriadosRouter() {
+  const router = Router();
+
+  const TIPOS_FERIADO = ['nacional', 'estadual', 'municipal', 'empresa'];
+  const TIPOS_APLICACAO = ['empresa', 'uf', 'cidade', 'departamento', 'horario', 'funcionario'];
+
+  function normalizarAplicacoes(lista) {
+    if (!Array.isArray(lista)) return [];
+    const vistos = new Set();
+    const out = [];
+    for (const a of lista) {
+      if (!a || !TIPOS_APLICACAO.includes(a.tipo)) continue;
+      const valor = String(a.valor || '').trim();
+      if (!valor) continue;
+      const chave = `${a.tipo}:${valor}`;
+      if (vistos.has(chave)) continue;
+      vistos.add(chave);
+      out.push({ tipo: a.tipo, valor, rotulo: a.rotulo ? String(a.rotulo) : null });
+    }
+    return out;
+  }
+
+  async function substituirAplicacoes(client, feriadoId, aplicacoes) {
+    await client.query('DELETE FROM feriado_aplicacoes WHERE feriado_id = $1', [feriadoId]);
+    for (const a of aplicacoes) {
+      await client.query(
+        `INSERT INTO feriado_aplicacoes (feriado_id, tipo, valor, rotulo)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT DO NOTHING`,
+        [feriadoId, a.tipo, a.valor, a.rotulo || null]
+      );
+    }
+  }
+
+  router.get('/', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const { rows } = await query(
+        `SELECT f.id, f.nome, to_char(f.data, 'YYYY-MM-DD') AS data, f.tipo,
+                f.recorrente, f.uf, f.cidade, f.alvo_empresa_id,
+                COALESCE(
+                  json_agg(json_build_object('tipo', a.tipo, 'valor', a.valor, 'rotulo', a.rotulo))
+                    FILTER (WHERE a.id IS NOT NULL),
+                  '[]'
+                ) AS aplicacoes
+           FROM feriados f
+           LEFT JOIN feriado_aplicacoes a ON a.feriado_id = f.id
+          WHERE f.empresa_id = $1
+          GROUP BY f.id
+          ORDER BY f.data ASC`,
+        [empresa]
+      );
+      res.json(rows);
+    } catch (e) {
+      tratarErro(res, e, 'feriados.list');
+    }
+  });
+
+  router.post('/', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const b = req.body || {};
+      if (!b.nome || !b.data) {
+        return res.status(400).json({ error: 'Nome e data são obrigatórios' });
+      }
+      const tipo = TIPOS_FERIADO.includes(b.tipo) ? b.tipo : 'municipal';
+      const aplicacoes = normalizarAplicacoes(b.aplicacoes);
+
+      const row = await withTransaction(async (client) => {
+        const r = await client.query(
+          `INSERT INTO feriados (empresa_id, nome, data, tipo, recorrente)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id, nome, to_char(data, 'YYYY-MM-DD') AS data, tipo, recorrente`,
+          [empresa, b.nome, b.data, tipo, Boolean(b.recorrente)]
+        );
+        await substituirAplicacoes(client, r.rows[0].id, aplicacoes);
+        return { ...r.rows[0], aplicacoes };
+      });
+
+      registrar(req, {
+        acao: 'criar',
+        entidade: 'feriados',
+        entidadeId: row.id,
+        detalhes: { nome: b.nome, data: b.data, tipo, aplicacoes },
+      });
+      res.status(201).json(row);
+    } catch (e) {
+      tratarErro(res, e, 'feriados.create');
+    }
+  });
+
+  router.put('/:id', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const b = req.body || {};
+      if (!b.nome || !b.data) {
+        return res.status(400).json({ error: 'Nome e data são obrigatórios' });
+      }
+      const tipo = TIPOS_FERIADO.includes(b.tipo) ? b.tipo : 'municipal';
+      const aplicacoes = normalizarAplicacoes(b.aplicacoes);
+
+      const row = await withTransaction(async (client) => {
+        const r = await client.query(
+          `UPDATE feriados
+              SET nome = $1, data = $2, tipo = $3, recorrente = $4
+            WHERE id = $5 AND empresa_id = $6
+            RETURNING id, nome, to_char(data, 'YYYY-MM-DD') AS data, tipo, recorrente`,
+          [b.nome, b.data, tipo, Boolean(b.recorrente), req.params.id, empresa]
+        );
+        if (!r.rows[0]) return null;
+        await substituirAplicacoes(client, req.params.id, aplicacoes);
+        return { ...r.rows[0], aplicacoes };
+      });
+
+      if (!row) return res.status(404).json({ error: 'Feriado não encontrado' });
+      registrar(req, {
+        acao: 'atualizar',
+        entidade: 'feriados',
+        entidadeId: req.params.id,
+        detalhes: { nome: b.nome, data: b.data, tipo, aplicacoes },
+      });
+      res.json(row);
+    } catch (e) {
+      tratarErro(res, e, 'feriados.update');
+    }
+  });
+
+  router.delete('/:id', async (req, res) => {
+    try {
+      const empresa = empresaId(req, res);
+      if (!empresa) return;
+      const { rows } = await query(
+        'DELETE FROM feriados WHERE id = $1 AND empresa_id = $2 RETURNING id',
+        [req.params.id, empresa]
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'Feriado não encontrado' });
+      registrar(req, { acao: 'excluir', entidade: 'feriados', entidadeId: req.params.id });
+      res.json({ ok: true });
+    } catch (e) {
+      tratarErro(res, e, 'feriados.delete');
+    }
+  });
+
+  return router;
+}
+
 // ── Justificativas ──────────────────────────────────────────────────────────
 
 function justificativasRouter() {
@@ -1320,13 +1472,7 @@ export function createCadastrosRouter() {
     columns: ['nome', 'config', 'ativo'],
     orderBy: 'nome ASC',
   }));
-  router.use('/feriados', simpleCrud({
-    table: 'feriados',
-    columns: ['data', 'nome', 'tipo', 'recorrente', 'uf', 'cidade', 'alvo_empresa_id'],
-    orderBy: 'data ASC',
-    beforeCreate: validarFeriado,
-    beforeUpdate: validarFeriado,
-  }));
+  router.use('/feriados', feriadosRouter());
   router.use('/justificativa-tipos', simpleCrud({
     table: 'justificativa_tipos',
     columns: [

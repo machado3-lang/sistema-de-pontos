@@ -1,10 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Camera, List } from 'lucide-react';
 import {
   Plus, X, Save, Clock, Users, Briefcase,
   formatCPF, formatPIS, ESTADOS_BR
 } from './CadastrosUtils';
 import { salvarHistHorarios, criarDepartamento, criarCargo } from '../data/pontoData';
+import { carregarMunicipios } from '../data/ibge';
 import { useToast } from '../components/Toast';
 
 export default function FuncionarioForm({
@@ -24,6 +25,19 @@ export default function FuncionarioForm({
   const [novoCargo, setNovoCargo] = useState('');
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [municipios, setMunicipios] = useState([]);
+
+  useEffect(() => {
+    let ativo = true;
+    if (!form.uf) {
+      setMunicipios([]);
+      return () => { ativo = false; };
+    }
+    carregarMunicipios(form.uf).then((lista) => {
+      if (ativo) setMunicipios(lista);
+    });
+    return () => { ativo = false; };
+  }, [form.uf]);
 
   const handlePhotoSelect = (e) => {
     const file = e.target.files?.[0];
@@ -166,13 +180,24 @@ export default function FuncionarioForm({
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Cidade</label>
-                  <input
-                    type="text"
+                  <select
                     className="form-input"
-                    value={form.cidade || ''}
-                    onChange={e => setForm({ ...form, cidade: e.target.value })}
-                    placeholder="Ex.: São Paulo"
-                  />
+                    value={form.cidade_ibge || ''}
+                    onChange={e => {
+                      const codigo = e.target.value;
+                      const nome = municipios.find(m => m.codigo === codigo)?.nome || '';
+                      setForm({ ...form, cidade_ibge: codigo, cidade: nome });
+                    }}
+                    disabled={!form.uf}
+                  >
+                    <option value="">{form.uf ? 'Selecione...' : 'Selecione a UF'}</option>
+                    {municipios.map(m => <option key={m.codigo} value={m.codigo}>{m.nome}</option>)}
+                  </select>
+                  {form.cidade && !form.cidade_ibge && (
+                    <span style={{ fontSize: '0.7rem', color: 'var(--warning, #f59e0b)' }}>
+                      Cidade atual: {form.cidade}. Selecione na lista para vincular o código IBGE.
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>UF</label>

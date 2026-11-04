@@ -397,8 +397,10 @@ try {
       data: `2099-12-${String((Number(sufixo) % 28) + 1).padStart(2, '0')}`,
       nome: `Teste ${sufixo}`,
       tipo: 'municipal',
-      uf: 'SP',
-      cidade: 'São Paulo',
+      aplicacoes: [
+        { tipo: 'uf', valor: 'SP', rotulo: 'SP' },
+        { tipo: 'cidade', valor: '3550308', rotulo: 'São Paulo' },
+      ],
     },
   });
   ok('criar feriado');
@@ -415,8 +417,10 @@ try {
       recorrente: true,
       nome: `Teste ${sufixo} recorrente`,
       tipo: 'municipal',
-      uf: 'SP',
-      cidade: 'São Paulo',
+      aplicacoes: [
+        { tipo: 'uf', valor: 'SP', rotulo: 'SP' },
+        { tipo: 'cidade', valor: '3550308', rotulo: 'São Paulo' },
+      ],
     },
   });
   ok('atualizar feriado');
