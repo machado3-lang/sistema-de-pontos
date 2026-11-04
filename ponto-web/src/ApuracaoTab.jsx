@@ -703,9 +703,9 @@ export default function ApuracaoTab({ usuario }) {
                 onChange={(e) => handleDefinirJornada(e.target.value)}
               >
                 <option value="">Usar horário padrão do funcionário</option>
-                {horarios.map((h) => (
+                {horarios.filter((h) => h.tipo === 'Eventual').map((h) => (
                   <option key={h.id} value={h.id}>
-                    {h.nome}{h.tipo === 'Eventual' ? ' (eventual)' : ''}
+                    {h.nome} (eventual)
                   </option>
                 ))}
               </select>
