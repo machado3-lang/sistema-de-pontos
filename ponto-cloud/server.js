@@ -148,6 +148,8 @@ app.get('/api/health', async (req, res) => {
     branch: process.env.RAILWAY_GIT_BRANCH || null,
     repo: process.env.RAILWAY_GIT_REPO_NAME || null,
     deployment: process.env.RAILWAY_DEPLOYMENT_ID || null,
+    // true = REP_SECRET configurado; credenciais de REP são cifradas no banco.
+    rep_encryption: Boolean(process.env.REP_SECRET),
   });
 });
 
