@@ -559,6 +559,11 @@ export default function RelatoriosTab({ usuario }) {
     const hReg = new Set();
     for (const f of funcComMarcacoes) {
       vinculoId++;
+      const calculado = gerarLinhasFunc(
+        f.doc, f.func, marcacoes, horarios, dataInicio, dataFim,
+        correcoes, diasDescartados, parametrosMap, marcacoesDescartadas,
+        feriados, jornadaExcecoes, justificativas
+      );
       const cpf = (f.func.cpf || '').replace(/\D/g, '').padStart(11, '0');
       lines.push(p(['03', String(vinculoId), cpf, (f.func.nome || f.nome || '').substring(0, 150)]));
       counts['03']++;
@@ -677,10 +682,25 @@ export default function RelatoriosTab({ usuario }) {
         lines.push(p(['06', String(vinculoId), (f.func.matricula || '').substring(0, 30)]));
         counts['06']++;
       }
-      for (const dateStr of Object.keys(days)) {
-        const desc = diasDescartados[`${f.doc}_${dateStr}`];
-        if (desc) {
-          lines.push(p(['07', String(vinculoId), '2', dateStr, '', '']));
+      for (const l of calculado.linhas) {
+        if (l.descartado) continue;
+        if (l.dsrMin > 0) {
+          lines.push(p(['07', String(vinculoId), '1', l.dateStr, '', '']));
+          counts['07']++;
+        }
+        if (l.previstoMin > 0 && l.debitoMin >= l.previstoMin) {
+          lines.push(p(['07', String(vinculoId), '2', l.dateStr, '', '']));
+          counts['07']++;
+        }
+        if ((l.bancoMin || 0) !== 0) {
+          lines.push(p([
+            '07',
+            String(vinculoId),
+            '3',
+            l.dateStr,
+            String(Math.abs(Math.round(l.bancoMin))),
+            l.bancoMin > 0 ? '1' : '2',
+          ]));
           counts['07']++;
         }
       }

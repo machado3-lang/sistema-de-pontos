@@ -925,6 +925,29 @@ Ajustes no upload do Dashboard (`ponto-web/src/App.jsx`):
 
 ---
 
+## 27. AEJ — ausências e banco (04/11/2026)
+
+O registro **tipo 07** do AEJ deixou de ser gerado a partir de "dias
+descartados" (o que produzia uma falta não justificada indevida). Agora ele
+segue o leiaute:
+
+- tipo 1: DSR (dias com DSR calculado);
+- tipo 2: falta não justificada (somente quando o débito cobre a jornada
+  prevista do dia);
+- tipo 3: movimento no banco de horas, com `qtMinutos` e `tipoMovBH`
+  (`1` inclusão / `2` compensação).
+
+O cálculo usa o mesmo motor e as mesmas justificativas da apuração
+(`gerarLinhasFunc`), então abonos e relocações de banco já refletem no AEJ.
+
+### Ainda pendente no AEJ
+
+- Identificador real do REP no registro tipo 02 (hoje usa o placeholder).
+- Assinatura digital P7S do arquivo.
+- Hash/validação do AEJ.
+
+---
+
 ## 23. Justificativas aplicadas no motor (04/11/2026)
 
 Os lançamentos de justificativa passaram a afetar o cálculo do dia, não são
