@@ -1,5 +1,12 @@
 # Migração para Railway — PostgreSQL
 
+> **Status 04/11/2026: migração concluída.** O sistema roda no Railway com
+> PostgreSQL, autenticação própria e o backend servindo o frontend no mesmo
+> serviço. As migrations vão da `001_init` à `013_inconsistencias`. O
+> `preDeployCommand` está configurado, mas **não é confiável** — rode
+> `npm run migrate` manualmente no console do Railway após cada deploy que
+> trouxer migration nova. Este documento permanece como histórico do plano.
+
 ## Resposta curta
 
 **Sim, é possível.** E o banco recomendado é **PostgreSQL**, não MySQL.
@@ -215,7 +222,7 @@ O repositório `sistema-de-pontos` tem um `Dockerfile` e um `railway.json` na **
    - `CORS_ORIGINS` (ex.: a URL do próprio serviço)
    - `SESSION_TTL_HOURS` (opcional, padrão 8)
    - `DATABASE_URL` é injetada automaticamente pelo plugin
-5. Faça o deploy. O `railway.json` executa `npm run migrate` no `preDeployCommand` e valida `/api/health`.
+5. Faça o deploy. O `railway.json` tem `preDeployCommand: ["npm run migrate"]` e healthcheck `/api/health`, mas o pre-deploy **não está executando de forma confiável**. Rode o migrate manualmente no console do serviço.
 6. Crie o admin (uma vez):
    ```bash
    railway run env ADMIN_EMAIL=admin@empresa.com ADMIN_PASSWORD=uma-senha-forte npm run seed:admin
@@ -292,25 +299,24 @@ O Railway injeta `PORT`; o servidor já lê `process.env.PORT`.
 
 ## Checklist
 
-- [ ] Recuperar/exportar dados do Supabase.
-- [ ] Criar projeto Railway + PostgreSQL.
-- [ ] Rodar `001_init.sql`.
-- [ ] Configurar `DATABASE_URL` e `JWT_SECRET`.
-- [ ] Implementar auth própria.
-- [ ] Migrar CRUD de funcionários/empresas.
-- [ ] Migrar marcações/mobile.
-- [ ] Migrar horários/parâmetros/correções para o banco.
+- [x] Recuperar/exportar dados do Supabase (ou iniciar com base nova).
+- [x] Criar projeto Railway + PostgreSQL.
+- [x] Rodar as migrations (`001` a `013`) com `npm run migrate`.
+- [x] Configurar `DATABASE_URL`, `API_TOKEN`, `MOBILE_TOKEN_SECRET`, `REP_SECRET` e `CORS_ORIGINS`.
+- [x] Implementar auth própria (sessão opaca + token mobile).
+- [x] Migrar CRUD de funcionários/empresas.
+- [x] Migrar marcações/mobile.
+- [x] Migrar horários/parâmetros/correções para o banco.
 - [x] Criar `src/api.js` e remover o SDK Supabase.
-- [ ] Testar build, motor e fluxo completo.
-- [ ] Configurar backup e health check.
-- [ ] Desligar o Supabase.
+- [x] Testar build, motor e fluxo completo.
+- [ ] Configurar backup automatizado e monitoramento.
+- [ ] Desligar definitivamente o Supabase.
 
 ---
 
 ## Próximo passo recomendado
 
-O backend e o frontend já usam PostgreSQL/API. Próximos passos:
-
-1. **Fase 1b/3b** — criar Postgres no Railway, rodar `npm run migrate` e validar com `npm run test:api`.
-2. **Fase 0** — exportar dados do Supabase (se o projeto for recuperável).
-3. **Fase 5** — deploy, backup e testes.
+1. **Fechamento fiscal** — identificador real do REP no AEJ tipo 02 + assinatura P7S.
+2. **Teste com AFD real** — seguir `GUIA_TESTE_AFD.md`.
+3. **Operação** — backup/restore testado e observabilidade.
+4. **Qualidade** — CI com build + `test:engine` + `test:api`.

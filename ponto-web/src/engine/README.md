@@ -11,6 +11,8 @@ AFD/REP → punch.normalizarMarcacoes → emparelharBatidas
         → night.calcularNoturno
         → overtime.calcularExtras
         → absence.calcularFaltas
+        → justification.aplicarJustificativas
+        → inconsistencies.avaliarInconsistencias
         → dsr.calcularDSR
         → bank.calcularBanco
         → calculator.calcularDia / calcularPeriodo
@@ -47,6 +49,7 @@ const linha = calcularDia({
   feriados: [],            // ['2026-11-02']
   jornadaOverride: null,   // { periodos, carga_diaria, folga }
   preAssinaladas: [],      // horários pré-assinalados
+  justificativas: [],      // lançamentos do dia (com flags do tipo)
 });
 ```
 
@@ -61,6 +64,8 @@ const linha = calcularDia({
 | `previstoMin`, `carga_esperada` | jornada prevista |
 | `trabalhadoMin`, `trabalhadoBrutoMin`, `normaisMin` | horas trabalhadas |
 | `extraMin`, `debitoMin`, `faltaMin`, `faltaJustificadaMin`, `atrasoMin` | HE e faltas |
+| `abonoMin`, `ajusteMin`, `saldoDiaMin`, `protegeDSR` | efeito das justificativas |
+| `justificativas` | lançamentos aplicados e efeito de cada um |
 | `extraFaixa1`, `extraFaixa2`, `faixa1Pct`, `faixa2Pct`, `percentualHE` | faixas de HE |
 | `extraDiurnoMin`, `extraNoturnoMin` | separação de HE |
 | `noturnoMin`, `noturnoRelogioMin`, `adicionalNoturno`, `horasNoturnas` | noturno |
@@ -91,6 +96,7 @@ const resultado = calcularPeriodo({
   feriados: [],
   jornadas: {},           // { '2026-10-15': { periodos, carga_diaria } }
   preAssinaladas: {},     // { '2026-10-15': ['12:00'] }
+  justificativas: [],     // lançamentos do período (filtrados por funcionário_id)
   bancoSaldoInicial: 0,
 });
 ```
@@ -105,8 +111,8 @@ const resultado = calcularPeriodo({
     totalPrevisto, totalTrabalhado, totalNormais, totalExtra,
     totalFalta, totalFaltaJustificada, totalNoturno, totalNoturnoRelogio,
     totalDSR, totalAtraso, totalTolerancia, totalExtraDiurno,
-    totalExtraNoturno, totalIntervaloFaltante,
-    saldo, bancoSaldoFinal,
+    totalExtraNoturno, totalIntervaloFaltante, totalAbono, totalAjuste,
+    saldo, saldoAjustado, bancoSaldoFinal,
     // compatibilidade:
     totalEsp, totalTrab, totalHE, totalNot
   },
@@ -123,7 +129,7 @@ Atalho para vários funcionários:
 calcularTodos({
   funcionarios, marcacoes, horarios, parametrosMap,
   correcoes, diasDescartados, marcacoesDescartadas,
-  feriados, dataInicio, dataFim,
+  feriados, justificativas, dataInicio, dataFim,
 });
 // → [calcularPeriodo(...), ...]
 ```
@@ -131,13 +137,46 @@ calcularTodos({
 ### AFD
 
 ```js
-import { parseAFD, parseAFDLinhas } from './engine/index.js';
+import { parseAFD, parseAFDLinhas, validarAFD } from './engine/index.js';
 
 parseAFDLinhas(conteudo);
-// → { linhas: [{ nsr, documento, data, hora, dataHora, portaria }], total }
+// → { linhas: [{ nsr, documento, data, hora, dataHora, portaria, tipo }],
+//     total, funcionarios, eventos, cabecalho, trailer, ordemNsrQuebrada }
 
 parseAFD(conteudo);
-// → { dados, linhas, totalBatidas, totalFuncionarios }
+// → { dados, linhas, totalBatidas, totalFuncionarios, nomes, cabecalho }
+
+validarAFD(conteudo);
+// → { ok, erros, avisos, resumo: { portaria, versao, empregador, periodo,
+//     marcacoes, tipo3, tipo7, funcionarios, funcionariosCadastradosNoRep, eventos } }
+```
+
+Aceita tipo 3 (REP-C/REP-A, 1510 e 671), tipo 7 (REP-P), cabeçalho (1),
+empregados (5), eventos (6) e trailer (9).
+
+### Justificativas
+
+```js
+import { aplicarJustificativas } from './engine/index.js';
+
+const efeito = aplicarJustificativas({
+  justificativas,          // lançamentos do dia
+  faltaMin,                // débito antes das justificativas
+  extraMin,                // extra antes das justificativas
+  previstoMin,
+});
+// → { faltaMin, extraMin, abonoFaltaMin, ajusteMin, bancoMin,
+//     protegeDSR, abonaDiaInteiro, itens, temJustificativa }
+```
+
+### Inconsistências
+
+```js
+import { avaliarInconsistencias } from './engine/index.js';
+
+const encontradas = avaliarInconsistencias(linha, tipos);
+// → [{ id, nome, campo, valorMin, valor, prioridade, icone, cor }]
+// ordenado por prioridade (menor primeiro)
 ```
 
 ### Utilitários
@@ -177,7 +216,7 @@ cd ponto-web
 npm run test:engine
 ```
 
-Cobrem: dia normal, HE com faixas, tolerância CLT e simples, falta de dia inteiro, feriado, trabalho em folga, noturno, escala cíclica, DSR, banco (piso/teto) e AFD 1510/671.
+Cobrem: dia normal, HE com faixas, tolerância CLT e simples, falta de dia inteiro, feriado, trabalho em folga, noturno, escala cíclica, DSR, banco (piso/teto), justificativas (6 tipos), proteção de DSR, inconsistências configuráveis e AFD 1510/671 (tipo 3, tipo 7, cabeçalho, empregado e trailer). São 61 checks.
 
 ## Compatibilidade
 

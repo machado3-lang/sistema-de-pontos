@@ -9,6 +9,12 @@ Data: 04/11/2026
 > IBGE, funcionário, departamento, horário): dimensões diferentes são **E**,
 > valores da mesma dimensão são **OU**. O `tipo` ficou como classificação.
 > A cidade é selecionável via IBGE (`funcionarios.cidade_ibge`).
+>
+> **Atualização 04/11/2026:** os seis tipos de justificativa (seção 2.3) e os
+> lançamentos (2.4) foram implementados, e o motor aplica o efeito de cada tipo
+> (seção 3.2). As inconsistências configuráveis (2.5/3.3) também foram
+> implementadas na migration `013_inconsistencias.sql` e na tela
+> Cadastros → Inconsistências.
 
 ---
 

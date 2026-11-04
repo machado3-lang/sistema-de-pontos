@@ -8,26 +8,39 @@ Data: 03/11/2026
 
 ## 1. Onde estamos hoje
 
+> **Atualização 04/11/2026:** as fases 5, 6 e boa parte da 7/8 foram
+> entregues. O sistema já tem PostgreSQL como fonte de verdade, roles,
+> auditoria, fechamento de período, feriados por escopo, justificativas com
+> efeito no motor, inconsistências configuráveis, AFD 1510/671 validado e AEJ
+> com motivo (tipo 05) e ausências/banco (tipo 07). Consulte `CONTINUIDADE.md`
+> (seções 14–27) para o detalhamento.
+
 **Já funciona em produção (Railway + PostgreSQL):**
 
-- Login próprio (e-mail/senha, sessão Bearer)
+- Login próprio (e-mail/senha, sessão Bearer), roles `admin`/`gestor`/`consulta`
+- Auditoria de todas as mutações
 - Cadastro de funcionários/empresas via API
 - Motor de cálculo unificado (jornada, HE, noturno, faltas, DSR, banco, tolerância CLT)
-- Apuração e relatórios consumindo o mesmo motor
-- Exportação AFD, ADFT, ACJEF e AEJ (frontend)
+- Apuração em grade (funcionário × dia) com painel de tratamento
+- Feriados por escopo combinável + cidade IBGE
+- Justificativas com efeito real (6 tipos) e catálogo de motivos de correção
+- Inconsistências configuráveis (limite, prioridade, cor)
+- Fechamento/reabertura de período com trava de escrita (HTTP 409)
+- Exportação AFD, AFDT, ACJEF e AEJ (frontend)
+- Parser/validador AFD 1510/671 (tipo 3 e tipo 7, cabeçalho, empregados e trailer)
 - Integração com REPs (proxy FCGI, push, iDFace)
 - Mobile de marcação via backend
 - Deploy single-service (backend serve o frontend)
 
 **Ainda frágil para nível profissional:**
 
-- Grande parte dos cadastros auxiliares e da apuração vive em `localStorage`
-- Sem papéis/permissões efetivos, sem auditoria e sem multiempresa na UI
-- REPs ainda em JSON; push em memória; credenciais de equipamento em texto puro
-- Arquivos fiscais gerados, mas sem validação/assinatura/hash formal
+- AEJ sem identificador real do REP (tipo 02) e sem assinatura P7S/hash formal
+- Sem edição inline da batida na grade
+- Sem fluxo de aprovação da apuração
 - Sem integração com folha/eSocial
-- Sem portal do funcionário, aprovações, geolocalização/anti-spoofing
-- Sem testes de backend, CI/CD, backup automatizado e monitoramento
+- Sem portal do funcionário, geolocalização/anti-spoofing
+- Sem backup automatizado, observabilidade e CI/CD
+- Lint ainda tem erros pré-existentes; sem testes E2E/contrato
 
 ---
 
@@ -36,22 +49,22 @@ Data: 03/11/2026
 | Capacidade | MultiPonto hoje | RHiD | Secullum | EzPoint |
 |---|---|---|---|---|
 | Motor de cálculo completo | ✅ bom | ✅ | ✅ | ✅ |
-| Banco de horas (piso/teto/período) | ⚠️ motor sim, UI não | ✅ | ✅ | ✅ |
-| DSR | ⚠️ motor sim, UI não | ✅ | ✅ | ✅ |
+| Banco de horas (piso/teto/período) | ✅ motor + UI | ✅ | ✅ | ✅ |
+| DSR | ✅ | ✅ | ✅ | ✅ |
 | Escalas cíclicas/mensais | ⚠️ motor sim, UI parcial | ✅ | ✅ | ✅ |
-| Jornada por exceção | ⚠️ motor sim, UI não | ✅ | ✅ | ✅ |
-| Feriados personalizados | ⚠️ motor sim, UI não | ✅ | ✅ | ✅ |
+| Jornada por exceção | ✅ | ✅ | ✅ | ✅ |
+| Feriados personalizados | ✅ escopo combinável | ✅ | ✅ | ✅ |
 | Tolerância Art. 58 / Art. 71 | ✅ motor | ✅ | ✅ | ✅ |
 | Tipos de batida (manual/pré/descartada) | ✅ | ✅ | ✅ | ✅ |
-| Fechamento de período/turno | ❌ | ✅ | ✅ | ✅ |
+| Fechamento de período/turno | ✅ período (turno pendente) | ✅ | ✅ | ✅ |
 | Fluxo de aprovação | ❌ | ✅ | ✅ | ✅ |
 | Portal do funcionário | ❌ | ✅ | ✅ | ✅ |
 | App mobile com geolocalização/anti-spoofing | ⚠️ marcação web | ✅ | ✅ | ✅ |
-| Multiempresa / multiusuário | ⚠️ backend sim, UI não | ✅ | ✅ | ✅ |
-| Papéis e permissões | ⚠️ campo role sem enforcement | ✅ | ✅ | ✅ |
-| Auditoria de alterações | ⚠️ tabela criada, sem uso | ✅ | ✅ | ✅ |
+| Multiempresa / multiusuário | ⚠️ backend sim, UI parcial | ✅ | ✅ | ✅ |
+| Papéis e permissões | ✅ backend + UI | ✅ | ✅ | ✅ |
+| Auditoria de alterações | ✅ | ✅ | ✅ | ✅ |
 | Relatórios customizáveis/exportação | ⚠️ básico | ✅ | ✅ | ✅ |
-| Arquivos fiscais 671/1510 | ⚠️ gerados, sem validação formal | ✅ | ✅ | ✅ |
+| Arquivos fiscais 671/1510 | ⚠️ AFD validado; AEJ sem P7S | ✅ | ✅ | ✅ |
 | Integração folha/eSocial | ❌ | ✅ | ✅ | ✅ |
 | Integração REP nativa | ✅ | ✅ | ✅ | ✅ |
 | Backup/PITR | ❌ | ✅ | ✅ | ✅ |
@@ -189,23 +202,32 @@ Data: 03/11/2026
 
 ### Fase 7 — Conformidade fiscal e folha (2–3 semanas) — **P0/P1**
 
-**Status (04/11/2026): iniciada — fechamento de período entregue.**
+**Status (04/11/2026): avançada — fechamento, AFD e parte do AEJ entregues.**
 
-1. ⏳ Validador de AFD/AFDT/ACJEF/AEJ contra o leiaute oficial.
-2. ⏳ Hash/NSR consistente e fechamento fiscal por período.
-3. ✅ Trava de período fechado + reabertura auditada.
-4. ⏳ Exportação para folha (Domínio, Alterdata, Fortes, Questor, Sênior) e eSocial.
-5. ⏳ Testes com arquivos reais de REP.
+1. ✅ Validador estrutural de AFD 1510/671 (tipo 3, tipo 7, cabeçalho,
+   empregados, eventos e trailer).
+2. ✅ Trava de período fechado + reabertura auditada.
+3. ✅ Motivo de correção no AEJ tipo 05 (catálogo + texto livre).
+4. ✅ AEJ tipo 07 (DSR, falta não justificada e banco).
+5. ⏳ Identificador real do REP no AEJ tipo 02 e assinatura P7S/hash.
+6. ⏳ Validação formal de AFDT/ACJEF/AEJ contra o leiaute.
+7. ⏳ Exportação para folha (Domínio, Alterdata, Fortes, Questor, Sênior) e eSocial.
+8. ⏳ Testes com arquivos reais de REP (em andamento).
 
 **Pronto quando:** um contador consegue fechar o mês, gerar os arquivos e importar na folha sem ajuste manual.
 
 ### Fase 8 — Workflow e relatórios (2–3 semanas) — **P1**
 
-1. Fluxo de aprovação da apuração.
-2. Férias, afastamentos, atestados e licenças.
-3. Telas de escala mensal, jornada por exceção, feriados e banco de horas.
-4. Relatórios customizáveis (Excel/CSV/PDF), agendamento e dashboard com KPIs.
-5. Espelho de ponto e cartão ponto.
+**Status (04/11/2026): parcialmente entregue.**
+
+1. ⏳ Fluxo de aprovação da apuração.
+2. ⚠️ Férias, afastamentos, atestados e licenças: justificativas genéricas
+   entregues; férias/afastamentos estruturados pendentes.
+3. ✅ Telas de feriados, justificativas, motivos, inconsistências e jornada
+   por exceção.
+4. ✅ Apuração em grade com colunas, filtros e painel de tratamento.
+5. ⏳ Relatórios customizáveis (Excel/CSV/PDF), agendamento e dashboard com KPIs.
+6. ⚠️ Espelho de ponto existe; cartão ponto dedicado pendente.
 
 **Pronto quando:** gestor aprova a apuração e o RH exporta relatórios sem planilha paralela.
 
@@ -246,10 +268,17 @@ Data: 03/11/2026
 
 ## 6. Próximo sprint recomendado
 
-**Fase 5 + Fase 6** em paralelo:
+Com as fases 5, 6 e boa parte da 7/8 concluídas, o próximo sprint deve focar em:
 
-1. Migrar os auxiliares do `localStorage` para PostgreSQL.
-2. Unificar REPs no banco e persistir push.
-3. Aplicar roles + auditoria.
+1. **Fechamento fiscal**: identificador real do REP no AEJ tipo 02, assinatura
+   P7S e validação formal de AFD/AFDT/ACJEF/AEJ.
+2. **Apuração**: edição inline da batida na grade e relatório de
+   justificativas/ocorrências.
+3. **Teste com AFD real** de pelo menos um REP de cada portaria (1510 e 671).
+4. **Operação**: backup/restore testado e observabilidade mínima (logs e
+   alertas de erro).
+5. **Qualidade**: limpar lint pré-existente e adicionar CI para build +
+   `test:engine` + `test:api`.
 
-Isso elimina os dois maiores riscos atuais: **perda/duplicidade de dados** e **falta de controle de acesso/auditoria**. Depois disso, a conformidade fiscal e a folha são o caminho natural para o nível RHiD/Secullum/EzPoint.
+Isso consolida a conformidade fiscal e reduz o risco operacional antes de
+avançar para aprovação, portal do funcionário e folha/eSocial.

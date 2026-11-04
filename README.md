@@ -6,10 +6,11 @@ Sistema de ponto eletrônico compatível com as **Portarias 1510 (PIS)** e **671
 
 - **Frontend:** React 19 + Vite 8 (`ponto-web`)
 - **Backend:** Node.js 20 + Express (`ponto-cloud`)
-- **Banco:** PostgreSQL (Railway) + JSON local no backend (REPs/push)
+- **Banco:** PostgreSQL (Railway)
 - **Autenticação:** própria (sessões no PostgreSQL + token mobile)
 - **Motor de cálculo:** JavaScript puro, unificado em `ponto-web/src/engine`
 - **Integração REP:** proxy FCGI + push server (iDClass/iDFace)
+- **Deploy:** serviço único no Railway (o backend serve o build do frontend)
 
 ## Arquitetura
 
@@ -69,7 +70,7 @@ Pontoweb/
 cd ponto-cloud
 npm install
 # configure DATABASE_URL no .env (ou suba o postgres do docker-compose)
-npm run migrate
+npm run migrate        # aplica 001–013
 ADMIN_EMAIL=admin@empresa.com ADMIN_PASSWORD=uma-senha-forte npm run seed:admin
 npm run dev            # http://localhost:3100
 
@@ -116,9 +117,13 @@ docker compose exec ponto-cloud env ADMIN_EMAIL=admin@empresa.com ADMIN_PASSWORD
 
 ## Segurança
 
-- Sem credenciais fixas no código: `API_TOKEN`, `ADMIN_PASSWORD` e `MOBILE_TOKEN_SECRET` vêm do ambiente.
-- Login mobile validado no backend; senha com hash PBKDF2/scrypt.
-- RLS habilitado em `funcionarios`, `empresas` e `marcacoes`.
+- Sem credenciais fixas no código: `API_TOKEN`, `ADMIN_PASSWORD`, `MOBILE_TOKEN_SECRET` e `REP_SECRET` vêm do ambiente.
+- Login mobile validado no backend; senha com hash scrypt (PBKDF2 legado aceito).
+- Sessões opacas no PostgreSQL, com expiração e revogação.
+- Roles `admin`/`gestor`/`consulta` aplicadas no backend.
+- Auditoria de todas as mutações.
+- `helmet`, rate limit global e CORS restrito.
+- Credenciais de REP cifradas com AES-256-GCM (`REP_SECRET`).
 - Marcação mobile usa a hora do servidor (America/Sao_Paulo).
 - Detalhes e checklist: [DOCUMENTACAO.md](DOCUMENTACAO.md#segurança-e-deploy-atualizado).
 
@@ -129,8 +134,14 @@ Uma única implementação em `ponto-web/src/engine/`:
 - Jornadas: fixa, cíclica, mensal, noturna, eventual e override por dia.
 - Batidas: original, manual, pré-assinalada e desconsiderada.
 - Tolerância CLT Art. 58, HE por faixas, noturno, faltas, DSR e banco de horas.
-- Parser AFD 1510/671.
-- Testes: `npm run test:engine`.
+- Feriados por escopo combinável (empresa, UF, cidade IBGE, funcionário, etc.).
+- Justificativas com efeito real: dia inteiro, período, horas, ajuste, banco e DSR.
+- Inconsistências configuráveis (atraso, falta, extra, banco e batida ímpar).
+- Parser/validador AFD 1510/671: tipo 3 (REP-C/REP-A), tipo 7 (REP-P),
+  cabeçalho, empregados, eventos e trailer.
+- Geração de AFD, AFDT, ACJEF e AEJ (com motivo no tipo 05 e ausências/banco
+  no tipo 07).
+- Testes: `npm run test:engine` (61 checks).
 
 API e regras: [ponto-web/src/engine/README.md](ponto-web/src/engine/README.md).
 
@@ -141,20 +152,29 @@ API e regras: [ponto-web/src/engine/README.md](ponto-web/src/engine/README.md).
 
 ## Documentação
 
-- [DOCUMENTACAO.md](DOCUMENTACAO.md) — visão funcional, API, banco, formato AFD, segurança e motor.
+- [DOCUMENTACAO.md](DOCUMENTACAO.md) — visão funcional, API, banco, AFD/AEJ, segurança e motor.
+- [GUIA_TESTE_AFD.md](GUIA_TESTE_AFD.md) — passo a passo para testar um AFD real.
 - [CONTINUIDADE.md](CONTINUIDADE.md) — estado atual, pendências e checklist para retomada.
-- [MIGRACAO_RAILWAY.md](MIGRACAO_RAILWAY.md) — plano de migração para Railway + PostgreSQL.
+- [ROADMAP_PROFISSIONAL.md](ROADMAP_PROFISSIONAL.md) — lacunas e plano de evolução.
+- [MIGRACAO_RAILWAY.md](MIGRACAO_RAILWAY.md) — deploy e operação no Railway.
+- [MODELO_FERIADOS_JUSTIFICATIVAS.md](MODELO_FERIADOS_JUSTIFICATIVAS.md) — modelo de feriados, justificativas e inconsistências.
 - [ponto-web/src/engine/README.md](ponto-web/src/engine/README.md) — referência do motor.
 
 ## Status atual
 
-- ✅ Segurança P0 aplicada
-- ✅ Motor de cálculo unificado
-- ✅ 34 testes do motor passando
-- ✅ Build passando
-- 🚧 UI para escala mensal, jornada por exceção e faixas avançadas de HE
-- 🚧 Multiempresa/tenant, aprovações e geolocalização
-- 🚧 Migração para Railway + PostgreSQL planejada (schema e runner prontos em `ponto-cloud/db`)
+- ✅ Segurança P0: roles, auditoria, sessão, rate limit, helmet, credenciais de REP
+- ✅ Motor de cálculo unificado (61 checks passando)
+- ✅ PostgreSQL como fonte de verdade (migrations 001–013)
+- ✅ Fechamento/reabertura de período com trava e auditoria
+- ✅ Feriados por escopo combinável (empresa, UF, cidade IBGE, funcionário)
+- ✅ Justificativas com efeito no motor (6 tipos) e catálogo de motivos
+- ✅ Inconsistências configuráveis na apuração
+- ✅ AFD 1510/671: parser, validador, trailer e importação robusta
+- ✅ AEJ: motivo no tipo 05, ausências/banco no tipo 07
+- 🚧 AEJ: identificador real do REP (tipo 02) e assinatura P7S
+- 🚧 Edição inline da batida na grade
+- 🚧 Integração com folha/eSocial
+- 🚧 Backup, observabilidade e CI/CD
 
 Consulte [CONTINUIDADE.md](CONTINUIDADE.md) para o roadmap completo.
 

@@ -1,12 +1,13 @@
-# Continuidade — Estado do Projeto (atualizado em 03/11/2026)
+# Continuidade — Estado do Projeto (atualizado em 04/11/2026)
 
 Este documento é o **ponto de retomada**. Ele resume o que foi feito, o que está validado, o que falta e como continuar.
 
 > **Repositório:** `sistema-de-pontos` (separado do `controle-de-acessos` em 03/11/2026).
 >
-> **Última verificação de código: 03/11/2026.** Build, testes do motor, `node --check`
-> do backend e smoke test da API (41 checks) validados no Railway. As seções 14 e 15
-> registram as Fases 5 e 6; a seção 16 é o handoff para o próximo dia.
+> **Última verificação de código: 04/11/2026.** Build e **61 checks** do motor
+> passando; `node --check` do backend OK. O smoke test da API tem **73 checks**
+> e deve ser executado no ambiente com PostgreSQL. As seções 21 a 27 registram
+> as entregas mais recentes (motivos, AFD, justificativas, inconsistências e AEJ).
 
 ---
 
@@ -15,25 +16,24 @@ Este documento é o **ponto de retomada**. Ele resume o que foi feito, o que est
 O MultiPonto está em produção no **Railway + PostgreSQL**, com autenticação própria,
 frontend servido pelo backend e dados de negócio no banco (não mais no navegador).
 
-**Estado em 03/11/2026:**
+**Estado em 04/11/2026:**
 
-1. **Fases 1–4 concluídas** — schema PostgreSQL, auth própria, CRUD multiempresa e
-   frontend consumindo `/api` (Supabase removido do código).
-2. **Fase 5 concluída e validada no Railway** — horários, parâmetros, departamentos,
-   cargos, correções, descartes, histórico, equipamentos, marcações e push server
-   persistidos no PostgreSQL. Smoke test com **41 checks OK**.
-3. **Fase 6 em andamento (parte principal entregue)** — roles
-   (`admin`/`gestor`/`consulta`) aplicados no backend, auditoria em todas as
-   mutações, gestão de usuários, `helmet`, rate limit global, CORS restrito e
-   credenciais de REP criptografadas com AES-256-GCM.
-4. **Motor de cálculo unificado** em `ponto-web/src/engine/`, com 34 testes
+1. **Fases 1–6 concluídas** — schema PostgreSQL, auth própria, CRUD multiempresa,
+   frontend consumindo `/api` (Supabase removido), roles, auditoria, gestão de
+   usuários, hardening HTTP e credenciais de REP cifradas.
+2. **Fechamento de período** — trava de escrita e reabertura auditada.
+3. **Apuração profissional** — feriados por escopo, justificativas com efeito no
+   motor (6 tipos), motivos de correção e inconsistências configuráveis.
+4. **AFD** — parser/validador 1510/671 (tipo 3 e tipo 7, cabeçalho, empregados e
+   trailer) e importação robusta (ISO-8859-1, hash e documentos não encontrados).
+5. **AEJ** — motivo obrigatório no tipo 05 e ausências/banco no tipo 07.
+6. **Motor de cálculo unificado** em `ponto-web/src/engine/`, com 61 checks
    (`npm run test:engine`).
 
 **Build atual:** passando (`npm run build`).
 **Testes do motor:** passando (`npm run test:engine`).
-**Backend:** `node --check` OK em `server.js`, `routes/*.js`, `push-store.js`,
-`secret-box.js`, `auditoria.js`.
-**Smoke test da API:** 41 checks OK no Railway (03/11/2026).
+**Backend:** `node --check` OK em `routes/crud.js`, `scripts/test-api.mjs` e demais módulos.
+**Migrations:** 001 a 013 (aplicar com `npm run migrate` no Railway).
 
 ---
 
@@ -846,6 +846,46 @@ Leiautes de referência no repositório: `afd_leiaute.pdf`, `afd_texto.txt`,
 
 ---
 
+## 23. Justificativas aplicadas no motor (04/11/2026)
+
+Os lançamentos de justificativa passaram a afetar o cálculo do dia, não são apenas registro.
+
+### Motor (`engine/justification.js` + `calculator.js`)
+
+- `dia_inteiro` + `abona_falta`: zera a falta do dia e soma em `faltaJustificadaMin`.
+- `periodo`: abona os minutos do intervalo (`inicio`/`fim`) do débito.
+- `horas` + `abona_horas`: abona `minutos` do débito.
+- `ajuste`: soma/subtrai `minutos` do saldo (`saldoDiaMin`).
+- `banco` + `gera_banco`: reloca o extra/falta do dia para o banco (`bancoAjusteMin`).
+- `dsr` + `protege_dsr`: o dia deixa de contar como falta no DSR.
+
+Campos novos por linha: `abonoMin`, `faltaJustificadaMin`, `saldoDiaMin`,
+`ajusteMin`, `bancoAjusteMin`, `protegeDSR`, `justificativas[]`.
+
+### Apuração
+
+- O formulário mostra os campos conforme o tipo:
+  - `periodo` → início/fim;
+  - `horas`/`ajuste` → minutos (ajuste aceita negativo);
+  - `exige_cid` → CID;
+  - `exige_anexo` → anexo.
+- A grade usa `debitoMin` e `normaisMin` do motor (refletem abono) e mostra o
+  abono na coluna Justif.
+- O painel mostra cartões de Abonado, Ajuste de saldo e DSR protegido.
+
+### Relatórios
+
+- O espelho de ponto carrega as justificativas do período, aplica no motor, usa
+  `saldoDiaMin` na coluna Saldo e mostra o tipo em Obs.
+- O ACJEF usa o débito já abonado.
+
+### Testes
+
+`npm run test:engine` cobre os seis comportamentos e a proteção de DSR.
+O smoke test da API valida período, minutos, CID e anexo da justificativa.
+
+---
+
 ## 24. AFD — correções de leiaute (04/11/2026)
 
 Ao conferir os leiautes oficiais (AFD 1510 e 671), o trailer estava sendo
@@ -950,45 +990,29 @@ O cálculo usa o mesmo motor e as mesmas justificativas da apuração
 
 ---
 
-## 23. Justificativas aplicadas no motor (04/11/2026)
+## 28. Retomada — próximos passos (04/11/2026)
 
-Os lançamentos de justificativa passaram a afetar o cálculo do dia, não são
-apenas registro.
+### Primeiro passo
 
-### Motor (engine/justification.js + calculator.js)
+1. No Railway: `cd /app && npm run migrate` (aplica 009–013).
+2. Testar um AFD real seguindo `GUIA_TESTE_AFD.md`.
+3. Registrar o resultado do teste (portaria, avisos, documentos não encontrados).
 
-- dia_inteiro + bona_falta: zera a falta do dia e soma em
-  altaJustificadaMin.
-- periodo: abona os minutos do intervalo (inicio/im) do débito.
-- horas + bona_horas: abona minutos do débito.
-- juste: soma/subtrai minutos do saldo (saldoDiaMin).
-- anco + gera_banco: reloca o extra/falta do dia para o banco
-  (ancoAjusteMin).
-- dsr + protege_dsr: o dia deixa de contar como falta no DSR.
+### Fila de trabalho
 
-Campos novos por linha: bonoMin, altaJustificadaMin, saldoDiaMin,
-justeMin, ancoAjusteMin, protegeDSR, justificativas[].
+1. **AFD/AEJ fiscal**: identificador real do REP no tipo 02, assinatura P7S e
+   validação formal.
+2. **Apuração**: edição inline da batida na grade e relatório de
+   justificativas/ocorrências.
+3. **Qualidade**: limpar lint pré-existente e CI com build + test:engine + test:api.
+4. **Operação**: backup/restore testado e observabilidade.
 
-### Apuração
+### Onde está cada coisa
 
-- O formulário mostra os campos conforme o tipo:
-  - período -> início/fim;
-  - horas/ajuste -> minutos (ajuste aceita negativo);
-  - exige_cid -> CID;
-  - exige_anexo -> anexo.
-- A grade usa debitoMin e 
-ormaisMin do motor (refletem abono) e mostra o
-  abono na coluna Justif.
-- O painel mostra cartões de Abonado, Ajuste de saldo e DSR protegido.
-
-### Relatórios
-
-- O espelho de ponto carrega as justificativas do período, aplica no motor, usa
-  saldoDiaMin na coluna Saldo e mostra o tipo em Obs.
-- O ACJEF usa o débito já abonado.
-
-### Testes
-
-
-pm run test:engine cobre os seis comportamentos e a proteção de DSR.
-O smoke test da API valida período, minutos, CID e anexo da justificativa.
+- `GUIA_TESTE_AFD.md` — teste do AFD real.
+- `DOCUMENTACAO.md` — referência técnica (API, banco, AFD, AEJ, motor).
+- `ROADMAP_PROFISSIONAL.md` — lacunas e fases.
+- `MIGRACAO_RAILWAY.md` — deploy e migrations.
+- `aej_texto.txt`, `afd_texto.txt`, `afd_1510_texto.txt` — leiautes oficiais.
+- Commits recentes: motivos/AEJ, justificativas no motor, inconsistências,
+  parser AFD, trailer 1510/671, importação AFD e AEJ tipo 07.

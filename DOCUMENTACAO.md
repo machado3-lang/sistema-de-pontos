@@ -46,10 +46,12 @@ Pontos/
     │   │   ├── night.js       # Adicional noturno e hora reduzida
     │   │   ├── overtime.js    # Faixas de horas extras
     │   │   ├── absence.js     # Faltas e atrasos
+    │   │   ├── justification.js # Efeito das justificativas no dia
+    │   │   ├── inconsistencies.js # Inconsistências configuráveis
     │   │   ├── dsr.js         # DSR
     │   │   ├── bank.js        # Banco de horas
     │   │   ├── calculator.js  # Orquestração dia/período
-    │   │   ├── afd.js         # Parser AFD 1510/671
+    │   │   ├── afd.js         # Parser/validador AFD 1510/671
     │   │   └── index.js       # Exportações
     │   ├── ApuracaoTab.jsx    # Aba de apuração de ponto
     │   ├── CadastrosTab.jsx   # Aba de cadastro (orquestrador)
@@ -59,6 +61,10 @@ Pontos/
     │   │   ├── HorarioSection.jsx     # CRUD de horários (fixa, escala, noturno, eventual)
     │   │   ├── FuncionarioForm.jsx    # Formulário de funcionário
     │   │   ├── FuncionarioLista.jsx   # Listagem de funcionários
+    │   │   ├── FeriadosSection.jsx    # Feriados com aplicações combináveis
+    │   │   ├── JustificativaTiposSection.jsx # Tipos de justificativa
+    │   │   ├── MotivosCorrecaoSection.jsx    # Motivos de correção (AEJ)
+    │   │   ├── InconsistenciasSection.jsx    # Inconsistências da apuração
     │   │   ├── AuxiliaresSection.jsx  # CRUD de departamentos, cargos, parâmetros
     │   │   └── EquipamentoSection.jsx # CRUD de REPs + conexão/sincronização
     │   └── components/
@@ -119,11 +125,16 @@ npm run dev          # porta 3100
 `/api/funcionarios`, `/api/empresas`, `/api/departamentos`, `/api/cargos`,
 `/api/horarios`, `/api/parametros`, `/api/equipamentos`, `/api/feriados`,
 `/api/correcoes`, `/api/dias-descartados`, `/api/marcacoes-descartadas`,
-`/api/banco-horas/ajustes`.
+`/api/banco-horas/ajustes`, `/api/justificativa-tipos`, `/api/justificativas`,
+`/api/jornada-excecoes`, `/api/motivos-correcao`, `/api/inconsistencia-tipos`.
 
 Marcações: `GET /api/marcacoes`, `POST /api/marcacoes`, `POST /api/marcacoes/import`.
 
 Histórico de horários: `GET/PUT /api/funcionarios/:id/hist-horarios`.
+
+Jornada por exceção (horário eventual do dia):
+`GET/POST /api/jornada-excecoes`, `PUT/DELETE /api/jornada-excecoes/:id`,
+`DELETE /api/jornada-excecoes?funcionario_id=...&data=...`.
 
 #### Usuários (somente `admin`)
 | Método | Rota | Descrição |
@@ -158,8 +169,44 @@ descartados, marcações descartadas e ajustes de banco (HTTP **409**).
 |--------|------|-----------|
 | GET | `/api/auditoria` | Lista a trilha (`entidade`, `acao`, `usuario_id`, `data_inicio`, `data_fim`, `limit`, `offset`) |
 
-#### Feriados
-`/api/feriados` com `data`, `nome`, `tipo` e `recorrente` (repete todo ano).
+#### Feriados, justificativas e inconsistências
+
+**Feriados** (`/api/feriados`):
+
+- `nome`, `data`, `tipo` (`nacional`, `estadual`, `municipal`, `empresa`),
+  `recorrente` (repete todo ano);
+- `uf`, `cidade`, `cidade_ibge`, `alvo_empresa_id`;
+- aplicações combináveis em `feriado_aplicacoes`:
+  - dimensões diferentes = **E**;
+  - valores da mesma dimensão = **OU**;
+  - dimensões: empresa, UF, cidade, funcionário, departamento, horário.
+- “Feriado como dia normal” fica no cadastro do **horário**
+  (`considerar_feriado_dia_normal`), não no feriado.
+
+**Tipos de justificativa** (`/api/justificativa-tipos`):
+
+- `nome`, `abreviacao`, `tipo` (`dia_inteiro`, `periodo`, `horas`, `ajuste`,
+  `banco`, `dsr`);
+- flags: `abona_falta`, `abona_horas`, `protege_dsr`, `gera_banco`,
+  `exige_cid`, `exige_anexo`, `tolerancia_min`, `ativo`.
+
+**Lançamentos de justificativa** (`/api/justificativas`):
+
+- `funcionario_id`, `tipo_id`, `data`, `inicio`, `fim`, `minutos`, `texto`,
+  `cid`, `anexo_url`;
+- o motor aplica o efeito conforme o tipo (ver seção “Justificativas”).
+
+**Motivos de correção** (`/api/motivos-correcao`):
+
+- catálogo de descrições para o campo `motivo` do AEJ (tipo 05);
+- a Apuração permite selecionar do catálogo ou digitar livremente.
+
+**Inconsistências** (`/api/inconsistencia-tipos`):
+
+- `nome`, `campo` (`atraso`, `falta`, `extra`, `banco`, `batida`, `outro`);
+- `valor_min`, `prioridade` (1 = mais grave), `icone`, `cor`, `ativo`;
+- a Apuração avalia cada dia e usa a inconsistência de menor prioridade como
+  status; o filtro “Somente inconsistências” usa o catálogo.
 
 #### Mobile
 | Método | Rota | Descrição |
@@ -243,44 +290,67 @@ npm run lint     # ESLint
 ### Funcionalidades por Aba
 
 #### Dashboard (Importação AFD)
-- Upload de arquivo AFD (`.txt`, `.afd`)
-- Parse automático (Portaria 671 e 1510)
-- Motor de cálculo roda **100% no navegador** (PontoEngine.js)
-- Cruzamento com funcionários cadastrados (por CPF/PIS)
-- Estatísticas: funcionários ativos, batidas processadas, inconsistências
+- Upload de arquivo AFD (`.txt`, `.afd`), lido como **ISO 8859-1**
+- Parse/validação automática (Portarias 1510 e 671)
+- Aceita marcação tipo 3 (REP-C/REP-A) e tipo 7 (REP-P)
+- Mostra portaria, versão, período, empregador, contagem por tipo, erros e avisos
+- Cruzamento com funcionários por CPF/PIS
+- Lista documentos sem funcionário cadastrado (com nome do tipo 5)
+- Importação idempotente por hash do conteúdo (`afd:<hash>`) e aviso se a
+  gravação no servidor falhar
 
 #### Cadastros
-- **Funcionários**: CRUD completo com validação de CPF, PIS, matrícula, empresa, departamento, cargo, horário, parâmetros
+- **Funcionários**: CRUD completo com validação de CPF, PIS, matrícula, empresa, departamento, cargo, horário, parâmetros e cidade IBGE
 - **Empresas**: CRUD com CNPJ/CPF, endereço, responsável
 - **Horários**: 4 tipos de jornada:
   - **Fixa** (dias da semana com períodos)
   - **Escala Flexível** (ciclo de N dias)
   - **Turno Noturno** (com adicional noturno e hora reduzida)
-  - **Eventual** (jornada avulsa)
+  - **Eventual** (jornada avulsa, usada na “Jornada do dia”)
   - Compensação semanal, períodos flexíveis/fixos
+- **Feriados**: nacional/estadual/municipal/empresa, recorrente, cidade IBGE e aplicações combináveis
+- **Justificativas**: tipos com efeito (dia inteiro, período, horas, ajuste, banco, DSR)
+- **Motivos**: catálogo para o motivo da correção no AEJ
+- **Inconsistências**: limites, prioridade, cor e ativo
 - **Departamentos, Cargos, Parâmetros**: CRUD simples com contagem de vínculos
 - **Equipamentos (REP)**: Cadastro, conexão (IP direto ou iDCloud), teste de conexão, sincronização bidirecional de funcionários, importação de marcações, download de AFD
 
 #### Apuração de Ponto
-- Lista de exceções (batidas ímpares, hora extra elevada >2h)
-- Dia a dia com linha do tempo de batidas
-- Saldo, horas trabalhadas vs previstas (base 8h)
-- Ações: incluir batida manual, justificativa, aplicar correção, desconsiderar dia
+- Grade **funcionário × dia** com colunas de batidas, previsto, trabalhado,
+  normais, noturno, atraso, extra, DSR, banco, status e justificativa
+- Painel de tratamento do dia com linha do tempo das batidas
+- Ações: incluir batida manual, motivo da correção, aplicar correção,
+  desconsiderar dia, restaurar dia
+- **Jornada do dia** lista apenas horários do tipo `Eventual`
+- **Justificativas** com campos condicionais (período, minutos, CID, anexo)
+- **Inconsistências configuráveis** no status e no filtro
+- Fechamento/reabertura de período com trava de escrita
 - Filtros por período e colaborador
 
-#### Relatórios (esboço)
-- Área reservada para geração de espelho de ponto PDF e exportação AFD/AFDT
+#### Relatórios
+- Espelho de ponto com colunas configuráveis
+- Exportação AFD, AFDT, ACJEF e AEJ
+- AEJ com motivo no tipo 05 e ausências/banco no tipo 07
 
 ### Autenticação
 - Login via **API do PontoCloud** (e-mail/senha; sessão Bearer em `sessoes`)
 - Sessão persistente com token em `localStorage` e validação em `/api/auth/me`
 - Tela de login com design institucional
 
-### Motor de Cálculo (PontoEngine.js)
-Funções principais:
-- `parseAFD(conteudo)`: lê arquivo AFD, extrai batidas tipo '3', separa por funcionário (CPF ou PIS), retorna dados processados
-- `processarCalculos(batidasPorFuncionario)`: agrupa por dia, ordena, calcula pares entrada/saída, detecta batidas ímpares
-- `parseMinutosToHHMM(minutos)`: formata minutos para HH:MM (suporta negativo)
+### Motor de Cálculo (engine/)
+
+A implementação real fica em `ponto-web/src/engine/`; `PontoEngine.js` apenas
+reexporta a API antiga. Funções principais:
+
+- `parseAFD(conteudo)` / `parseAFDLinhas(conteudo)`: lê AFD 1510/671 (tipos 3 e 7);
+- `validarAFD(conteudo)`: erros, avisos e resumo do arquivo;
+- `calcularDia(entrada)`: cálculo de um dia com batidas, tolerância, HE,
+  noturno, faltas, DSR, banco e justificativas;
+- `calcularPeriodo(entrada)`: período completo de um funcionário;
+- `aplicarJustificativas(...)`: efeito dos 6 tipos de justificativa;
+- `avaliarInconsistencias(linha, tipos)`: inconsistências configuráveis;
+- `formatMinutes(minutos)` (reexportado como `parseMinutosToHHMM`): formata
+  minutos para HH:MM.
 
 ### Persistência de dados (Fase 5)
 
@@ -329,14 +399,32 @@ Configuração manual no Render: root dir = `ponto-cloud`, start = `npm start`, 
 ## BANCO DE DADOS
 
 ### PostgreSQL (tabelas principais)
-Schema: `ponto-cloud/db/migrations/001_init.sql`.
 
-- `empresas`, `usuarios`, `sessoes`
-- `funcionarios`, `departamentos`, `cargos`
-- `horarios` (`config jsonb`), `parametros` (`config jsonb`)
-- `equipamentos`
-- `marcacoes`, `correcoes`, `dias_descartados`, `marcacoes_descartadas`, `banco_horas_ajustes`
-- `feriados`, `auditoria`, `schema_migrations`
+Schema base: `ponto-cloud/db/migrations/001_init.sql`. Migrations aplicadas em
+ordem por `npm run migrate`:
+
+| Migration | Conteúdo |
+|---|---|
+| `001_init.sql` | empresas, usuários, sessões, funcionários, horários, parâmetros, marcações, correções, descartes, banco, feriados, auditoria |
+| `002_hist_horarios.sql` | histórico de horários do funcionário |
+| `003_equipamentos_campos.sql` | campos extras de equipamentos |
+| `004_empresas_tenant.sql` | `tenant_id` nas empresas |
+| `005_empresas_tenant_backfill.sql` | backfill do tenant |
+| `006_push_persistencia.sql` | devices, events e results do push |
+| `007_periodos_fechados.sql` | fechamento/reabertura de período |
+| `008_feriados_recorrente.sql` | feriados recorrentes |
+| `009_feriados_justificativas.sql` | cidade/UF, justificativa_tipos e justificativas |
+| `010_feriado_aplicacoes.sql` | aplicações combináveis de feriado |
+| `011_jornada_excecoes.sql` | jornada eventual por dia |
+| `012_motivos_correcao.sql` | catálogo de motivos + motivo em marcações descartadas |
+| `013_inconsistencias.sql` | tipos de inconsistência configuráveis |
+
+Tabelas: `empresas`, `usuarios`, `sessoes`, `funcionarios`, `departamentos`,
+`cargos`, `horarios`, `parametros`, `equipamentos`, `marcacoes`, `correcoes`,
+`dias_descartados`, `marcacoes_descartadas`, `banco_horas_ajustes`, `feriados`,
+`feriado_aplicacoes`, `justificativa_tipos`, `justificativas`,
+`jornada_excecoes`, `motivos_correcao`, `inconsistencia_tipos`, `periodos_fechados`,
+`auditoria`, `schema_migrations`.
 
 ### JSON local (ponto-cloud/data/database.json — legado REP/push)
 Estrutura:
@@ -350,33 +438,119 @@ Estrutura:
 
 ---
 
-## FORMATO AFD
+## FORMATO AFD (Portarias 1510 e 671)
 
-### Registro tipo '3' — Batida
+O AFD é o arquivo **fonte** de dados: contém as marcações originais do REP.
+Ele não tem campo de motivo de correção — correções e seus motivos pertencem ao
+**AEJ**.
+
+### Registro tipo 3 — Marcação de REP-C/REP-A
 
 **Portaria 1510 (PIS)** — 34 caracteres:
+
 ```
 [0-8]   NSR (9 dígitos)
 [9]     Tipo = '3'
-[10-11] Dia (DD)
-[12-13] Mês (MM)
-[14-17] Ano (YYYY)
-[18-19] Hora (HH)
-[20-21] Minuto (MM)
+[10-17] Data (ddmmaaaa)
+[18-21] Hora (hhmm)
 [22-33] PIS (12 dígitos, com zero à esquerda)
 ```
 
-**Portaria 671 (CPF)** — 45+ caracteres:
+**Portaria 671 (CPF)** — 50 caracteres (com CRC):
+
 ```
 [0-8]   NSR (9 dígitos)
 [9]     Tipo = '3'
-[10-28] DataHora ISO (YYYY-MM-DDTHH:MM:SS)
-[34-44] CPF (11 dígitos)
+[10-33] Data/hora (AAAA-MM-DDThh:mm:00-0300)
+[34-45] CPF (12 posições)
+[46-49] CRC-16
 ```
 
+### Registro tipo 7 — Marcação de REP-P
+
+```
+[0-8]   NSR
+[9]     Tipo = '7'
+[10-33] Data/hora da marcação
+[34-45] CPF
+[46-69] Data/hora de gravação
+[70-71] Coletor (01 mobile, 02 browser, 03 desktop, 04 dispositivo, 05 outro)
+[72]    On-line (0) / off-line (1)
+[73-136] Hash SHA-256
+```
+
+### Outros registros
+
+- **Tipo 1** — cabeçalho (empregador, período, versão e dados do REP);
+- **Tipo 5** — inclusão/alteração/exclusão de empregado (PIS/CPF e nome);
+- **Tipo 6** — eventos sensíveis do REP (671);
+- **Tipo 9** — trailer.
+
 ### Detecção automática
-Se o caractere `[14]` for `'-'` → formato ISO → Portaria 671 (CPF)
-Caso contrário → formato clássico → Portaria 1510 (PIS)
+
+- tipo 3 com `[14] === '-'` → Portaria 671 (CPF);
+- tipo 3 sem `'-'` → Portaria 1510 (PIS);
+- tipo 7 → Portaria 671 (REP-P).
+
+### Trailer (tipo 9)
+
+Nos AFDs 1510 e 671 o tipo `9` fica na **última posição** do registro, depois
+dos contadores:
+
+- 1510: `999999999` + 4 contadores (2, 3, 4, 5) + `9` = 46 caracteres;
+- 671: `999999999` + 6 contadores (2, 3, 4, 5, 6, 7) + `9` = 64 caracteres.
+
+O parser reconhece os dois formatos e valida a quantidade de marcações contra
+o trailer.
+
+### Validação (`validarAFD`)
+
+Retorna:
+
+- `ok`, `erros`, `avisos`;
+- resumo: portaria, versão, empregador, período, marcações (tipo 3 e 7),
+  funcionários cadastrados no REP e eventos.
+
+A importação no Dashboard mostra esse resumo antes de gravar.
+
+---
+
+## FORMATO AEJ (Portaria 671)
+
+O AEJ é o arquivo de jornada, com registros delimitados por `|`:
+
+| Tipo | Conteúdo |
+|---|---|
+| `01` | cabeçalho (empregador, período, geração, versão `001`) |
+| `02` | REPs utilizados |
+| `03` | vínculos (CPF + nome) |
+| `04` | horário contratual |
+| `05` | marcações |
+| `06` | matrícula eSocial (quando houver mais de um vínculo) |
+| `07` | ausências e banco de horas |
+| `08` | identificação do PTRP |
+| `99` | trailer com contadores |
+
+No **tipo 05**, o campo `motivo` é obrigatório quando:
+
+- `tpMarc = D` (marcação desconsiderada); ou
+- `fonteMarc = I` (marcação incluída manualmente).
+
+O sistema preenche esse motivo a partir do catálogo `motivos_correcao` ou do
+texto livre informado na Apuração.
+
+No **tipo 07**:
+
+- tipo 1: DSR;
+- tipo 2: falta não justificada (quando o débito cobre a jornada);
+- tipo 3: movimento de banco, com `qtMinutos` e `tipoMovBH`
+  (`1` inclusão, `2` compensação).
+
+### Pendências do AEJ
+
+- identificador real do REP no registro tipo 02 (hoje placeholder);
+- assinatura digital P7S;
+- hash/validação formal do arquivo.
 
 ---
 
@@ -418,9 +592,12 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ### Migration obrigatória
 
-Execute `npm run migrate` em `ponto-cloud` (ou deixe o `preDeployCommand` do Railway rodar). O schema está em `ponto-cloud/db/migrations/001_init.sql` e cria empresas, usuários, sessões, funcionários, horários, parâmetros, marcações, correções, banco de horas, feriados e auditoria.
+Execute `npm run migrate` em `ponto-cloud`. O runner aplica, em ordem, todas as
+migrations pendentes de `ponto-cloud/db/migrations` (001 a 013). Não dependa do
+`preDeployCommand` do Railway: ele não está executando de forma confiável.
 
-O `ponto-cloud/migration_supabase.sql` é **legado**, apenas para exportar dados antigos do Supabase.
+O `ponto-cloud/migration_supabase.sql` é **legado**, apenas para exportar dados
+antigos do Supabase.
 
 ### App mobile
 
@@ -432,7 +609,7 @@ O `ponto-cloud/migration_supabase.sql` é **legado**, apenas para exportar dados
 
 - Sirva o sistema em **HTTPS**. Em HTTP de rede local o fallback PBKDF2 em JS mantém o cadastro funcionando, mas o tráfego (incluindo a senha do login mobile) não é criptografado.
 - Os endpoints de **push** (`/push`, `/event`) continuam públicos para receber dados dos equipamentos; proteja-os por rede/firewall ou evolua para um token por dispositivo.
-- As políticas RLS atuais liberam dados para qualquer usuário autenticado. Para multiempresa, evolua para políticas por `empresa_id`/claim.
+- O isolamento por empresa é feito no backend (`empresa_id`/tenant) e nas rotas; não há RLS no PostgreSQL. Para defesa em profundidade, avalie RLS por `empresa_id`.
 
 ---
 
@@ -452,10 +629,12 @@ A partir desta versão existe **uma única implementação de cálculo** em `pon
 | `night.js` | adicional noturno, hora reduzida 52:30 e turnos que cruzam a meia-noite |
 | `overtime.js` | faixas de HE por tipo de dia, HE diurna/noturna e percentual médio |
 | `absence.js` | faltas, atrasos e justificativas |
+| `justification.js` | efeito dos 6 tipos de justificativa no dia |
+| `inconsistencies.js` | inconsistências configuráveis (atraso, falta, extra, banco, batida) |
 | `dsr.js` | DSR por média de HE, com feriados e desconto por faltas |
 | `bank.js` | banco de horas: crédito, débito, ajuste, piso/teto e controle diário/mensal |
 | `calculator.js` | orquestração por dia e por período + memória de cálculo |
-| `afd.js` | parser AFD Portaria 1510 (PIS) e 671 (CPF) |
+| `afd.js` | parser/validador AFD Portaria 1510 (PIS) e 671 (CPF), tipos 3 e 7 |
 
 ### Regras suportadas hoje
 
@@ -466,8 +645,15 @@ A partir desta versão existe **uma única implementação de cálculo** em `pon
 - HE: faixas por tipo de dia, HE normal/noturna e modo avançado por lista de faixas.
 - Noturno: janela 22:00–05:00, hora reduzida e adicional configurável.
 - Faltas: dia inteiro, parciais, justificadas e “somente dia inteiro”.
-- DSR: média de HE por semana/mês, feriados e desconto por faltas.
-- Banco de horas: piso/teto, multiplicador, primeira/última faixa, controle diário/mensal.
+- Justificativas: dia inteiro, período, horas, ajuste, banco e DSR, com CID/anexo.
+- Feriados: nacional/estadual/municipal/empresa, recorrente, cidade IBGE e
+  aplicações combináveis.
+- DSR: média de HE por semana/mês, feriados e desconto por faltas; justificativa
+  com `protege_dsr` não desconta o DSR.
+- Banco de horas: piso/teto, multiplicador, primeira/última faixa, controle
+  diário/mensal e relocação por justificativa.
+- Inconsistências: limites configuráveis, prioridade e cor.
+- Fechamento de período: bloqueio de escrita e reabertura auditada.
 - Interjornada (11h) e intrajornada (intervalo previsto).
 - Memória de cálculo por dia (`memoria`) para auditoria.
 
@@ -498,9 +684,12 @@ A partir desta versão existe **uma única implementação de cálculo** em `pon
 
 - Fluxo de aprovação de apuração (RHiD).
 - Geolocalização/anti-spoofing no mobile (EzPoint).
-- UI para escala mensal, jornada por exceção e faixas avançadas de HE.
-- Multiempresa/tenant com RLS por `empresa_id`.
-- Compensação explícita de faltas/extras entre dias (hoje via banco de horas).
+- UI completa para escala mensal e faixas avançadas de HE.
+- Edição inline da batida na grade.
+- Relatório de justificativas e ocorrências.
+- AEJ: identificador real do REP (tipo 02) e assinatura P7S.
+- Integração com folha/eSocial.
+- Backup, observabilidade e CI/CD.
 
 ### Testes do motor
 
@@ -509,14 +698,22 @@ cd ponto-web
 npm run test:engine
 ```
 
-Cobrem: dia normal, HE com faixas, tolerância CLT e simples, falta de dia inteiro, feriado, trabalho em folga, noturno, escala cíclica, DSR, banco (piso/teto) e AFD 1510/671.
+Cobrem: dia normal, HE com faixas, tolerância CLT e simples, falta de dia
+inteiro, feriado, trabalho em folga, noturno, escala cíclica, DSR, banco
+(piso/teto), justificativas (6 tipos), proteção de DSR, inconsistências
+configuráveis e AFD 1510/671 (tipo 3, tipo 7, cabeçalho, empregado e trailer).
+São 61 checks.
 
 ---
 
 ## Observações Finais
 
-- O frontend consome a API do PontoCloud (PostgreSQL) via `src/api.js`
-- O backend usa PostgreSQL para auth/CRUD e JSON local apenas para REPs/push
-- Toda a apuração de ponto roda **offline** no navegador
-- Para desenvolvimento, use `npm run dev` em ambos os projetos simultaneamente
-- Para produção, use Docker Compose ou deploy separado (Vercel + Render)
+- O frontend consome a API do PontoCloud (PostgreSQL) via `src/api.js`.
+- O PostgreSQL é a fonte de verdade; o navegador guarda apenas cache e o token.
+- O cálculo roda no navegador (motor unificado), mas os dados vêm da API.
+- Para desenvolvimento, use `npm run dev` em ambos os projetos simultaneamente.
+- Em produção, o deploy recomendado é o serviço único do Railway: o Dockerfile
+  da raiz builda o frontend e o backend serve o `dist`.
+- Migrations novas exigem `npm run migrate` manual no Railway (o
+  `preDeployCommand` não está confiável).
+- Credenciais expostas em chat de teste devem ser rotacionadas antes de produção.
