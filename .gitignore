@@ -10,3 +10,6 @@ dist-ssr/
 # Dados de runtime do backend
 ponto-cloud/data/*.json
 !ponto-cloud/data/.gitkeep
+
+# Manuais locais (pesados)
+Manual_RHiD.pdf
